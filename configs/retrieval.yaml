@@ -1,0 +1,31 @@
+retrieval:
+  bm25_top_k: 20
+  dense_top_k: 20
+  final_top_k: 5
+  hybrid_alpha: 0.5
+  use_reranker: true
+  reranker_top_k: 5
+
+embedding:
+  model_name: "BAAI/bge-m3"
+  normalize: true
+  dimension: 1024
+
+vector_store:
+  backend: "milvus"
+
+milvus:
+  uri: "http://localhost:19530"
+  token: ""
+  database: "default"
+  collection_name: "hotpotqa_global_chunks"
+  metric_type: "COSINE"
+  index_type: "HNSW"
+  index_params:
+    M: 16
+    efConstruction: 200
+  search_params:
+    ef: 64
+
+reranker:
+  model_name: "BAAI/bge-reranker-v2-m3"

@@ -1,0 +1,2 @@
+# Core dependencies will be expanded during implementation.
+pymilvus==2.6.11
