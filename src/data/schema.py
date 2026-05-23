@@ -75,13 +75,14 @@ class HotpotQASample:
         return asdict(self)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True) # slots：限制这个对象只能有类里面声明过的字段
 class PipelineResult:
     """Common output record for pipeline predictions."""
 
     id: str
     question: str
     gold_answer: str
+    gold_supporting_facts: list[list[Any]]
     pred_answer: str
     retrieved_docs: list[dict[str, Any]]
     pred_citations: list[dict[str, Any]]

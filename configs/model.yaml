@@ -1,1 +1,11 @@
-# Model configuration placeholder.
+llm:
+  provider: "aliyun_dashscope"
+  model_name: "qwen3.5-27b"
+  temperature: 0.0
+  max_tokens: 512
+
+aliyun_dashscope:
+  api_key_env: "DASHSCOPE_API_KEY"
+  base_url_env: "DASHSCOPE_BASE_URL"
+  model_env: "DASHSCOPE_MODEL"
+  timeout_seconds_env: "DASHSCOPE_TIMEOUT_SECONDS"

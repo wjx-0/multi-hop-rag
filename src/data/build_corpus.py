@@ -9,7 +9,11 @@ from typing import Any
 from src.data.schema import Document, HotpotQASample
 from src.utils.text import normalize_whitespace
 
-
+''' Example input sample.context:
+    [
+    ["Arthur's Magazine", ["sentence 0", "sentence 1"]],
+    ["First for Women", ["sentence 0", "sentence 1"]]
+]'''
 def context_to_documents(
     sample: HotpotQASample,
     *,

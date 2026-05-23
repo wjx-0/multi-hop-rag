@@ -120,7 +120,8 @@ python3 -m pytest
 │
 ├── scripts/                           # 命令行入口
 │   ├── prepare_data.py                # raw HotpotQA -> per-sample processed JSONL
-│   ├── run_standard_rag.py            # 运行 Phase 1 Standard RAG smoke baseline
+│   ├── run_standard_rag.py            # 运行 Phase 1 Standard RAG；支持 --llm mock/aliyun
+│   ├── ask_standard_rag.py            # 单问题 demo：输入 question，在小型 HotpotQA corpus 中检索回答
 │   ├── evaluate.py                    # 汇总 prediction JSONL 指标
 │   ├── build_index.py                 # 后续构建 global corpus / Milvus index
 │   ├── run_router_rag.py              # 后续运行 Router-RAG
@@ -138,7 +139,7 @@ python3 -m pytest
 │   │
 │   ├── retrieval/                     # BM25、Dense、Hybrid、Reranker、Milvus
 │   │   ├── __init__.py
-│   │   ├── bm25.py                    # Phase 1 轻量 BM25 检索器
+│   │   ├── bm25.py                    # Phase 1 BM25 检索器，基于 rank_bm25 包
 │   │   ├── dense.py                   # 后续 Dense Retriever 占位
 │   │   ├── hybrid.py                  # 后续 BM25 + Dense 融合检索占位
 │   │   ├── reranker.py                # 后续 reranker wrapper 占位
@@ -204,7 +205,7 @@ python3 -m pytest
 | Module | Key Files | Responsibility |
 |---|---|---|
 | `src/data/` | `schema.py`, `load_hotpotqa.py`, `build_corpus.py`, `preprocess.py` | 定义核心数据结构，读取 HotpotQA，将 paragraph 转成 Document chunks |
-| `src/retrieval/` | `bm25.py`, `dense.py`, `hybrid.py`, `reranker.py`, `milvus_store.py` | Phase 1 已实现 BM25；后续接 Milvus dense retrieval、hybrid fusion 和 reranker |
+| `src/retrieval/` | `bm25.py`, `dense.py`, `hybrid.py`, `reranker.py`, `milvus_store.py` | Phase 1 已用 `rank_bm25` 实现 BM25；后续接 Milvus dense retrieval、hybrid fusion 和 reranker |
 | `src/pipeline/` | `standard_rag.py`, `router_rag.py`, `qream_mass_rag.py` | 编排端到端流程；当前已实现 Standard RAG smoke baseline |
 | `src/evaluation/` | `answer_metrics.py`, `evidence_metrics.py`, `citation_metrics.py`, `route_metrics.py`, `cost_metrics.py` | 当前已实现 Answer EM/F1；后续补证据、引用、路由和成本指标 |
 | `src/utils/` | `io.py`, `text.py`, `llm_client.py`, `logger.py` | 通用 IO、文本归一化、LLMClient 抽象和日志工具 |

@@ -358,7 +358,7 @@ src/retrieval/
 - Reranker wrapper
 - Index builder
 
-第一阶段只要求 BM25。
+第一阶段只要求 BM25，默认使用 `rank_bm25` 包实现，不维护手写 BM25 公式版本。
 
 验收标准：
 

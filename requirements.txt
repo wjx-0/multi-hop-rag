@@ -1,2 +1,4 @@
 # Core dependencies will be expanded during implementation.
 pymilvus==2.6.11
+rank-bm25==0.2.2
+pytest==8.4.2
