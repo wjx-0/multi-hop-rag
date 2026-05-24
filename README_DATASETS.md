@@ -257,6 +257,38 @@ Phase 2 更像真实 RAG：
 - 同 title 多版本段落的匹配问题
 - 检索不到 gold paragraph 时的 evidence recall 统计
 
+### 3.6 Global Corpus 评测注意事项
+
+HotpotQA 的 `supporting_facts` 标注是：
+
+```text
+[title, sentence_id]
+```
+
+但 global corpus 的去重 key 是：
+
+```text
+normalized_title + normalized_text
+```
+
+因此评测时要注意：同一个 title 可能对应多个不同 paragraph 版本，甚至 sentence 切分略有差异。模型可能检索到语义上正确、title 也正确的证据，但如果严格按原始 `sentence_id` 对齐，`Supporting Fact F1` 仍可能被判错。
+
+第一版建议把证据指标分层解释：
+
+- `Evidence Recall@k`：优先作为 title-level / paragraph-level 检索覆盖指标，判断 gold title 是否进入 top-k。
+- `Supporting Fact F1`：作为严格 citation 指标，要求 `title + sentence_id` 同时命中。
+- `Answer F1`：单独评价最终答案，不要用它替代证据质量。
+
+后续如果要更严谨，应实现一个 gold evidence resolver：
+
+```text
+gold [title, sentence_id]
+-> 在 global corpus 中查找 normalized title 对应 docs
+-> 根据 gold sentence 文本或 sentence overlap 解析到具体 doc_id + sentence_id
+```
+
+在 resolver 完成前，报告中需要说明 title-level evidence recall 偏宽，strict supporting-fact / citation 指标可能因为同 title 多版本和 sentence 对齐问题偏严。
+
 ---
 
 ## 4. Phase 3: Natural Questions 小样本

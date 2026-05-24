@@ -12,6 +12,14 @@ def read_json(path: str | Path) -> Any:
         return json.load(f)
 
 
+def write_json(data: Any, path: str | Path) -> None:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
 def write_jsonl(records: Iterable[dict[str, Any]], path: str | Path) -> int:
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -103,7 +103,7 @@ def evidence_metrics(
     gold_supporting_facts: list[list[Any]],
     *,
     predicted_supporting_facts: list[Any] | None = None,
-    ks: tuple[int, ...] = (5, 10),
+    ks: tuple[int, ...] = (5, 10, 20, 50),
 ) -> dict[str, float]:
     metrics: dict[str, float] = {}
     for k in ks:

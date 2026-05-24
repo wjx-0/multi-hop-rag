@@ -83,10 +83,10 @@ docker compose down
 
 ## 3. Python 依赖
 
-安装 PyMilvus：
+安装 PyMilvus 和 embedding 依赖：
 
 ```bash
-pip install pymilvus==2.6.11
+pip install pymilvus==2.6.11 sentence-transformers==5.1.2 numpy==2.2.6
 ```
 
 验证：
@@ -109,14 +109,14 @@ hotpotqa_global_chunks
 
 | Field | Type | Purpose |
 |---|---|---|
-| id | VARCHAR | Milvus primary key |
-| doc_id | VARCHAR | 项目内部 document id |
+| doc_id | VARCHAR | Milvus primary key / 项目内部 document id |
 | title | VARCHAR | HotpotQA paragraph title |
 | text | VARCHAR | paragraph text |
-| source_question_ids | ARRAY/VARCHAR | 来源样本 id |
+| sentences_json | VARCHAR | paragraph sentences JSON |
+| metadata_json | VARCHAR | 精简 metadata JSON |
 | embedding | FLOAT_VECTOR | dense embedding |
 
-第一版可以把 `source_question_ids` 简化为 JSON string，减少 schema 复杂度。
+完整 `source_locations` 仍以 `corpus.jsonl` 为准，不直接写入 Milvus，避免 metadata 过大。
 
 ---
 
@@ -129,6 +129,58 @@ question
   -> embedding model
   -> Milvus vector search
   -> top-k RetrievedDoc
+```
+
+构建 dense index smoke：
+
+```bash
+conda run -n qream-rag python scripts/build_index.py \
+  --mode milvus-dense \
+  --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
+  --limit 100 \
+  --drop-existing
+```
+
+本地直接构建全量 Milvus dense index：
+
+```bash
+conda run --no-capture-output -n qream-rag python -u scripts/build_index.py \
+  --mode milvus-dense \
+  --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
+  --drop-existing \
+  --embedding-batch-size 64
+```
+
+如果用 GPU 服务器加速，推荐先在服务器只导出 embedding 分片：
+
+```bash
+python -u scripts/build_index.py \
+  --mode dense-embeddings \
+  --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
+  --embedding-output-dir data/indexes/hotpotqa_global/bge_m3_embeddings \
+  --embedding-device cuda \
+  --embedding-batch-size 128 \
+  --embedding-shard-size 8192 \
+  --drop-existing
+```
+
+把 `data/indexes/hotpotqa_global/bge_m3_embeddings/` 传回本地后，导入本地 Milvus：
+
+```bash
+conda run --no-capture-output -n qream-rag python -u scripts/build_index.py \
+  --mode milvus-import-embeddings \
+  --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
+  --embedding-input-dir data/indexes/hotpotqa_global/bge_m3_embeddings \
+  --drop-existing \
+  --milvus-insert-batch-size 1024
+```
+
+单问题 dense retrieval smoke：
+
+```bash
+conda run -n qream-rag python scripts/run_dense_retrieval.py \
+  --question "Were Scott Derrickson and Ed Wood of the same nationality?" \
+  --top-k 5
 ```
 
 Hybrid retrieval：

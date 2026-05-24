@@ -541,9 +541,11 @@ Phase 2 开始引入 Milvus 作为 dense vector store。
 
 任务：
 
-- 构建 HotpotQA deduplicated global corpus。
-- 实现 Milvus vector store。
-- 实现 Dense Retriever。
+- 构建 HotpotQA deduplicated global corpus。（已实现 JSONL corpus / dev questions / title index）
+- 实现 global BM25 Standard RAG baseline。（已实现默认 global corpus + DashScope API 路径 + BM25 cache）
+- 实现 Milvus vector store。（已实现 hotpotqa_global_chunks collection 封装）
+- 实现 Dense Retriever。（已实现 BGE-M3 -> Milvus dense top-k）
+- 支持 GPU 服务器离线导出 BGE-M3 embedding 分片，并在本地导入 Milvus。（已实现 `dense-embeddings` / `milvus-import-embeddings`）
 - 实现 Hybrid Retriever。
 - 接入 Reranker。
 - 实现 Evidence Recall@k。
@@ -866,20 +868,18 @@ Phase 2 开始引入 Milvus 作为 dense vector store。
 
 ## 13. 当前仓库状态
 
-当前已经创建项目骨架：
+当前已经完成 Phase 1 smoke baseline，并开始 Phase 2 global corpus：
 
 ```text
-configs/
-data/
-outputs/
-scripts/
-src/
-tests/
+HotpotQA loader
+per-sample BM25 Standard RAG
+Answer / Evidence metrics
+DashScope client
+HotpotQA global deduplicated corpus builder
+Global BM25 Standard RAG baseline
 ```
 
-当前还没有实现具体功能。
-
-下一步从 **Phase 1: Standard RAG Baseline** 开始。
+下一步从 **Milvus Dense / Hybrid Retrieval Upgrade** 继续。
 
 ---
 

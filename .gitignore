@@ -5,3 +5,4 @@ __pycache__/
 outputs/**/*.jsonl
 data/processed/
 data/indexes/
+infra/milvus/volumes/

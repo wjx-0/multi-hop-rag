@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -104,6 +106,9 @@ class AliyunDashScopeClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout_seconds: float | None = None,
+        max_retries: int | None = None,
+        retry_backoff_seconds: float | None = None,
+        min_request_interval_seconds: float | None = None,
         env_path: str | Path = ".env",
     ) -> None:
         load_env_file(env_path)
@@ -125,6 +130,22 @@ class AliyunDashScopeClient:
             if timeout_seconds is not None
             else float(os.getenv("DASHSCOPE_TIMEOUT_SECONDS", "60"))
         )
+        self.max_retries = (
+            max_retries
+            if max_retries is not None
+            else int(os.getenv("DASHSCOPE_MAX_RETRIES", "3"))
+        )
+        self.retry_backoff_seconds = (
+            retry_backoff_seconds
+            if retry_backoff_seconds is not None
+            else float(os.getenv("DASHSCOPE_RETRY_BACKOFF_SECONDS", "1.5"))
+        )
+        self.min_request_interval_seconds = (
+            min_request_interval_seconds
+            if min_request_interval_seconds is not None
+            else float(os.getenv("DASHSCOPE_MIN_REQUEST_INTERVAL_SECONDS", "1.0"))
+        )
+        self._last_request_started_at = 0.0
 
     @property
     def chat_completions_url(self) -> str:
@@ -152,17 +173,43 @@ class AliyunDashScopeClient:
             method="POST",
         )
 
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-                response_body = response.read().decode("utf-8")
-        except urllib.error.HTTPError as error:
-            error_body = error.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"DashScope HTTP {error.code}: {error_body}") from error
-        except urllib.error.URLError as error:
-            raise RuntimeError(f"DashScope request failed: {error}") from error
+        response_body = self._send_with_retries(request)
 
         data = json.loads(response_body)
         return data["choices"][0]["message"]["content"]
+
+    def _send_with_retries(self, request: urllib.request.Request) -> str:
+        attempts = self.max_retries + 1
+        last_error: BaseException | None = None
+        for attempt in range(1, attempts + 1):
+            self._throttle()
+            try:
+                self._last_request_started_at = perf_counter()
+                with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                    return response.read().decode("utf-8")
+            except urllib.error.HTTPError as error:
+                error_body = error.read().decode("utf-8", errors="replace")
+                last_error = RuntimeError(f"DashScope HTTP {error.code}: {error_body}")
+                if not _is_retryable_http_status(error.code) or attempt == attempts:
+                    raise last_error from error
+            except (urllib.error.URLError, TimeoutError, ssl.SSLError) as error:
+                last_error = RuntimeError(f"DashScope request failed: {error}")
+                if attempt == attempts:
+                    raise last_error from error
+
+            sleep_seconds = self.retry_backoff_seconds * (2 ** (attempt - 1))
+            print(f"DashScope request failed; retrying in {sleep_seconds:.1f}s ({attempt}/{self.max_retries})")
+            time.sleep(sleep_seconds)
+
+        raise RuntimeError(f"DashScope request failed after retries: {last_error}")
+
+    def _throttle(self) -> None:
+        if self.min_request_interval_seconds <= 0:
+            return
+        elapsed = perf_counter() - self._last_request_started_at
+        wait_seconds = self.min_request_interval_seconds - elapsed
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
 
     def generate_json(self, messages: list[dict[str, str]], schema: Any = None, **kwargs: Any) -> dict[str, Any]:
         content = self.generate(messages, **kwargs)
@@ -216,3 +263,7 @@ def _strip_json_fence(text: str) -> str:
     if lines and lines[-1].strip() == "```":
         lines = lines[:-1]
     return "\n".join(lines).strip()
+
+
+def _is_retryable_http_status(status_code: int) -> bool:
+    return status_code == 429 or 500 <= status_code < 600

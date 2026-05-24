@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import pickle
+from pathlib import Path
+from typing import Any
+
 from rank_bm25 import BM25Okapi
 
 from src.data.schema import Document, RetrievedDoc
 from src.utils.text import simple_tokenize
+
+BM25_CACHE_VERSION = 1
 
 
 class BM25Retriever:
@@ -105,3 +111,58 @@ class BM25Retriever:
     )
     ]
 '''
+
+
+def corpus_fingerprint(path: str | Path) -> dict[str, Any]:
+    corpus_path = Path(path)
+    stat = corpus_path.stat()
+    return {
+        "path": str(corpus_path.resolve()),
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+    }
+
+
+def save_bm25_cache(
+    retriever: BM25Retriever,
+    cache_path: str | Path,
+    *,
+    corpus_path: str | Path,
+) -> None:
+    output_path = Path(cache_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": BM25_CACHE_VERSION,
+        "corpus_fingerprint": corpus_fingerprint(corpus_path),
+        "retriever": retriever,
+    }
+    with output_path.open("wb") as f:
+        pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def load_bm25_cache(
+    cache_path: str | Path,
+    *,
+    corpus_path: str | Path,
+) -> BM25Retriever | None:
+    input_path = Path(cache_path)
+    if not input_path.exists():
+        return None
+
+    try:
+        with input_path.open("rb") as f:
+            payload = pickle.load(f)
+    except (OSError, pickle.PickleError, EOFError, AttributeError, ImportError):
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("version") != BM25_CACHE_VERSION:
+        return None
+    if payload.get("corpus_fingerprint") != corpus_fingerprint(corpus_path):
+        return None
+
+    retriever = payload.get("retriever")
+    if not isinstance(retriever, BM25Retriever):
+        return None
+    return retriever

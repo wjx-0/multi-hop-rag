@@ -64,16 +64,44 @@ HotpotQA raw JSON
 -> prediction JSONL
 ```
 
+并已开始 Phase 2 的全局语料准备：
+
+```text
+HotpotQA train + dev context
+-> global deduplicated paragraph corpus
+-> dev questions JSONL
+-> normalized title -> doc_ids index
+-> global BM25 Standard RAG baseline
+-> BM25 cache at data/indexes/hotpotqa_global/bm25.pkl
+```
+
 已经跑通：
 
 ```text
 python3 scripts/prepare_data.py --limit 20 --output data/processed/hotpotqa/per_sample/dev_samples_smoke.jsonl
-python3 scripts/run_standard_rag.py --limit 20 --output outputs/predictions/standard_rag_dev_smoke.jsonl
-python3 scripts/evaluate.py --predictions outputs/predictions/standard_rag_dev_smoke.jsonl
+python3 scripts/build_index.py --mode global-corpus --limit-train 10 --limit-dev 5
+python3 scripts/run_standard_rag.py --limit 20 --top-k 5 --output outputs/predictions/standard_rag_global_bm25_api_smoke.jsonl
+python3 scripts/evaluate.py --predictions outputs/predictions/standard_rag_global_bm25_api_smoke.jsonl
 python3 -m pytest
 ```
 
-当前还没有实现真实 LLM、Router、QREAM、多 Agent、Milvus global index。
+如果修改或重建了 global corpus，可以强制刷新 BM25 cache：
+
+```bash
+python3 scripts/run_standard_rag.py --rebuild-bm25-cache --limit 1 --llm mock
+```
+
+DashScope API 默认会限速并重试临时网络错误。网络不稳时可以显式放慢请求：
+
+```bash
+python3 scripts/run_standard_rag.py \
+  --limit 20 \
+  --api-min-request-interval-seconds 2 \
+  --api-max-retries 5 \
+  --api-retry-backoff-seconds 2
+```
+
+当前还没有实现 Router、QREAM、多 Agent、Milvus vector index。
 
 ---
 
@@ -102,8 +130,13 @@ python3 -m pytest
 │   │       └── hotpot_train_v1.1.json            # train，后续构建 global corpus
 │   ├── processed/
 │   │   └── hotpotqa/
-│   │       └── per_sample/            # Phase 1 processed JSONL 输出
-│   └── indexes/                       # 后续 BM25 / Milvus 索引元数据
+│   │       ├── per_sample/            # Phase 1 processed JSONL 输出
+│   │       └── global/                # Phase 2 corpus.jsonl / questions_dev.jsonl / title_to_doc_ids.json
+│   └── indexes/                       # BM25 cache、Milvus 元数据、GPU embedding 分片
+│       └── hotpotqa_global/
+│           ├── bm25.pkl               # global BM25 cache，本地生成
+│           ├── dense_build_meta.json  # dense / Milvus 构建记录
+│           └── bge_m3_embeddings/     # GPU 服务器导出的 embedding .npz 分片
 │
 ├── infra/
 │   └── milvus/                        # 后续放 Milvus Docker Compose 文件
@@ -120,10 +153,11 @@ python3 -m pytest
 │
 ├── scripts/                           # 命令行入口
 │   ├── prepare_data.py                # raw HotpotQA -> per-sample processed JSONL
-│   ├── run_standard_rag.py            # 运行 Phase 1 Standard RAG；支持 --llm mock/aliyun
+│   ├── run_standard_rag.py            # 默认运行 global BM25 + DashScope API；支持 per-sample/mock debug
 │   ├── ask_standard_rag.py            # 单问题 demo：输入 question，在小型 HotpotQA corpus 中检索回答
 │   ├── evaluate.py                    # 汇总 prediction JSONL 指标
-│   ├── build_index.py                 # 后续构建 global corpus / Milvus index
+│   ├── build_index.py                 # 构建 global corpus / dense embeddings / Milvus dense index
+│   ├── run_dense_retrieval.py         # 单问题 dense retrieval smoke
 │   ├── run_router_rag.py              # 后续运行 Router-RAG
 │   └── run_qream_mass_rag.py          # 后续运行 QREAM + MASS-RAG
 │
@@ -140,11 +174,11 @@ python3 -m pytest
 │   ├── retrieval/                     # BM25、Dense、Hybrid、Reranker、Milvus
 │   │   ├── __init__.py
 │   │   ├── bm25.py                    # Phase 1 BM25 检索器，基于 rank_bm25 包
-│   │   ├── dense.py                   # 后续 Dense Retriever 占位
+│   │   ├── dense.py                   # BGE-M3 embedding 和 Dense Retriever
 │   │   ├── hybrid.py                  # 后续 BM25 + Dense 融合检索占位
 │   │   ├── reranker.py                # 后续 reranker wrapper 占位
-│   │   ├── index_builder.py           # 后续索引构建逻辑占位
-│   │   └── milvus_store.py            # 后续 Milvus collection / insert / search 封装占位
+│   │   ├── index_builder.py           # global corpus / dense index 构建逻辑
+│   │   └── milvus_store.py            # Milvus collection / insert / search 封装
 │   │
 │   ├── pipeline/                      # Standard RAG、Router-RAG、QREAM-MASS-RAG
 │   │   ├── __init__.py

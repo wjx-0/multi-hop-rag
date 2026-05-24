@@ -3,24 +3,56 @@
 from __future__ import annotations
 
 from src.data.build_corpus import context_to_documents
-from src.data.schema import HotpotQASample, PipelineResult
+from src.data.schema import Document, HotpotQASample, PipelineResult
 from src.evaluation.answer_metrics import answer_metrics
 from src.evaluation.evidence_metrics import evidence_metrics
 from src.retrieval.bm25 import BM25Retriever
-from src.utils.llm_client import LLMClient, MockLLMClient
+from src.utils.llm_client import GenerationResult, LLMClient, MockLLMClient
 from src.utils.text import simple_tokenize
 
 
 class StandardRAGPipeline:
-    def __init__(self, *, top_k: int = 5, llm_client: LLMClient | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        top_k: int = 5,
+        llm_client: LLMClient | None = None,
+        documents: list[Document] | None = None,
+        retriever: BM25Retriever | None = None,
+    ) -> None:
+        if documents is not None and retriever is not None:
+            raise ValueError("Pass either documents or retriever, not both.")
+
         self.top_k = top_k
         self.llm_client = llm_client or MockLLMClient()
+        self.retriever = retriever or (BM25Retriever(documents) if documents is not None else None)
+        self.retrieval_mode = "global" if self.retriever is not None else "per_sample"
 
     def run(self, sample: HotpotQASample) -> PipelineResult:
-        documents = context_to_documents(sample)
-        retriever = BM25Retriever(documents)
+        if self.retriever is None:
+            documents = context_to_documents(sample)
+            retriever = BM25Retriever(documents)
+            route_reason = "per_sample_standard_rag"
+        else:
+            retriever = self.retriever
+            route_reason = "global_bm25_standard_rag"
+
         retrieved_docs = retriever.retrieve(sample.question, top_k=self.top_k)
-        generation = self.llm_client.answer_from_docs(sample.question, retrieved_docs)
+        generation_error: str | None = None
+        try:
+            generation = self.llm_client.answer_from_docs(sample.question, retrieved_docs)
+        except Exception as error:
+            generation_error = str(error)
+            generation = GenerationResult(
+                answer="",
+                cost={
+                    "llm_calls": 1,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "latency": 0.0,
+                    "error": generation_error,
+                },
+            )
 
         citations = select_sentence_citations(
             question=sample.question,
@@ -37,6 +69,11 @@ class StandardRAGPipeline:
                 predicted_supporting_facts=citations,
             )
         )
+        agent_outputs = {}
+        if generation_error is not None:
+            metrics["llm_error"] = 1.0
+            agent_outputs["llm_error"] = generation_error
+
         return PipelineResult(
             id=sample.id,
             question=sample.question,
@@ -47,9 +84,15 @@ class StandardRAGPipeline:
             pred_citations=citations,
             metrics=metrics,
             cost=generation.cost,
-            route_initial={"route": "simple", "confidence": 1.0, "reason": "phase1_standard_rag"},
+            route_initial={
+                "route": "simple",
+                "confidence": 1.0,
+                "reason": route_reason,
+                "retrieval_mode": self.retrieval_mode,
+            },
             route_final="simple",
             was_upgraded=False,
+            agent_outputs=agent_outputs,
         )
 
 
