@@ -17,6 +17,8 @@ def test_run_rerank_rag_parse_args():
             "25",
             "--answer-top-k",
             "10",
+            "--title-boost-weight",
+            "0.0007",
             "--llm",
             "mock",
             "--output",
@@ -30,6 +32,7 @@ def test_run_rerank_rag_parse_args():
     assert args.hybrid_top_k == 50
     assert args.rerank_top_n == 25
     assert args.answer_top_k == 10
+    assert args.title_boost_weight == 0.0007
     assert args.llm == "mock"
     assert args.output == "outputs/predictions/rerank_rag.jsonl"
 
@@ -53,6 +56,7 @@ def test_run_rerank_rag_falls_back_when_reranker_fails():
             rrf_k=60,
             query_batch_size=1,
             progress_interval=0,
+            title_boost_weight=0.0,
         )
     )
 
@@ -86,6 +90,7 @@ def test_run_rerank_rag_records_llm_errors_and_continues():
             rrf_k=60,
             query_batch_size=1,
             progress_interval=0,
+            title_boost_weight=0.0,
         )
     )
 

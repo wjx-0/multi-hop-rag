@@ -224,6 +224,18 @@ conda run --no-capture-output -n qream-rag python -u scripts/diagnose_hybrid_ret
   --output outputs/predictions/hybrid_retrieval_global_100_bm25top50_dense50_final50.jsonl
 ```
 
+如果不想只测 dev 前 N 条，可以用均匀位置抽样。例如从 7,405 条 dev questions 中均匀抽 500 条：
+
+```bash
+conda run --no-capture-output -n qream-rag python -u scripts/diagnose_hybrid_retrieval.py \
+  --sample-size 500 \
+  --sample-strategy uniform \
+  --bm25-top-k 50 \
+  --dense-top-k 50 \
+  --final-top-k 50 \
+  --output outputs/predictions/hybrid_retrieval_global_uniform500_top50.jsonl
+```
+
 汇总 hybrid evidence metrics：
 
 ```bash
@@ -232,6 +244,12 @@ conda run -n qream-rag python scripts/evaluate_prediction_metrics.py \
 
 conda run -n qream-rag python scripts/evaluate_prediction_metrics.py \
   --predictions outputs/predictions/hybrid_retrieval_global_100_bm25top50_dense50_final50.jsonl
+```
+
+Hybrid 融合默认启用轻量 title boost：问题和文档标题的有效 token 命中时，每个 token 加 `0.0005`，单文档最多加 `0.0015`。这个分数只用于小幅调整 RRF 排序；如果要回到纯 RRF，可以加：
+
+```bash
+--title-boost-weight 0
 ```
 
 Hybrid + DashScope reranker diagnostic，不调用回答 LLM：

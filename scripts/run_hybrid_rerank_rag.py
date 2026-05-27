@@ -23,7 +23,7 @@ from src.evaluation.evidence_metrics import evidence_metrics
 from src.pipeline.standard_rag import select_sentence_citations
 from src.retrieval.bm25 import BM25Retriever, load_bm25_cache, save_bm25_cache
 from src.retrieval.dense import SentenceTransformerEmbedder
-from src.retrieval.hybrid import fuse_rrf_ranked_docs
+from src.retrieval.hybrid import DEFAULT_TITLE_BOOST_WEIGHT, fuse_rrf_ranked_docs
 from src.retrieval.milvus_store import MilvusHotpotStore
 from src.retrieval.reranker import (
     DEFAULT_RERANK_INSTRUCT,
@@ -54,6 +54,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--rerank-top-n", type=int, default=50)
     parser.add_argument("--answer-top-k", type=int, default=10)
     parser.add_argument("--rrf-k", type=int, default=60)
+    parser.add_argument("--title-boost-weight", type=float, default=DEFAULT_TITLE_BOOST_WEIGHT)
     parser.add_argument("--query-batch-size", type=int, default=32)
     parser.add_argument("--progress-interval", type=int, default=5)
     parser.add_argument("--embedding-model", default="BAAI/bge-m3")
@@ -145,6 +146,7 @@ def main() -> None:
         rerank_top_n=args.rerank_top_n,
         answer_top_k=args.answer_top_k,
         rrf_k=args.rrf_k,
+        title_boost_weight=args.title_boost_weight,
         query_batch_size=args.query_batch_size,
         progress_interval=args.progress_interval,
     )
@@ -168,6 +170,7 @@ def _run_rerank_rag(
     rrf_k: int,
     query_batch_size: int,
     progress_interval: int,
+    title_boost_weight: float = DEFAULT_TITLE_BOOST_WEIGHT,
 ) -> Iterator[dict]:
     processed = 0
     for batch in iter_batches(samples, query_batch_size):
@@ -176,10 +179,12 @@ def _run_rerank_rag(
             bm25_docs = bm25_retriever.retrieve(sample.question, top_k=bm25_top_k)
             dense_docs = store.search(embedding, top_k=dense_top_k)
             hybrid_docs = fuse_rrf_ranked_docs(
+                query=sample.question,
                 bm25_docs=bm25_docs,
                 dense_docs=dense_docs,
                 final_top_k=hybrid_top_k,
                 rrf_k=rrf_k,
+                title_boost_weight=title_boost_weight,
             )
             rerank_error = 0.0
             try:
@@ -332,6 +337,8 @@ def _validate_args(args: argparse.Namespace) -> None:
     for field in positive_fields:
         if getattr(args, field) <= 0:
             raise ValueError(f"--{field.replace('_', '-')} must be positive.")
+    if args.title_boost_weight < 0:
+        raise ValueError("--title-boost-weight must be non-negative.")
 
 
 def _ensure_global_inputs_exist(corpus_path: Path, questions_path: Path) -> None:

@@ -880,6 +880,11 @@ Answer / Evidence metrics
 DashScope client
 HotpotQA global deduplicated corpus builder
 Global BM25 Standard RAG baseline
+BGE-M3 + Milvus dense retrieval
+BM25 + Dense RRF Hybrid retrieval
+Hybrid title boost
+DashScope reranker diagnostic
+Hybrid + Reranker RAG generation baseline
 ```
 
 下一步从 **Milvus Dense / Hybrid Retrieval Upgrade** 继续。

@@ -15,6 +15,8 @@ def test_run_rerank_diagnostic_parse_args():
             "50",
             "--rerank-top-n",
             "25",
+            "--title-boost-weight",
+            "0.0007",
             "--api-min-request-interval-seconds",
             "0.5",
             "--api-max-retries",
@@ -31,6 +33,7 @@ def test_run_rerank_diagnostic_parse_args():
     assert args.dense_top_k == 60
     assert args.hybrid_top_k == 50
     assert args.rerank_top_n == 25
+    assert args.title_boost_weight == 0.0007
     assert args.api_min_request_interval_seconds == 0.5
     assert args.api_max_retries == 2
     assert args.api_retry_backoff_seconds == 0.1
@@ -62,6 +65,7 @@ def test_run_rerank_diagnostic_records_error_and_keeps_hybrid_order():
             rrf_k=60,
             query_batch_size=1,
             progress_interval=0,
+            title_boost_weight=0.0,
         )
     )
 

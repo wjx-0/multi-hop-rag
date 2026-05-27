@@ -59,6 +59,26 @@ def test_rrf_fusion_keeps_bm25_only_and_dense_only_docs():
     assert by_id["dense-only"].metadata["hybrid_sources"] == ["dense"]
 
 
+def test_rrf_fusion_can_lightly_boost_title_matches():
+    results = fuse_rrf_ranked_docs(
+        query="Was Scott Derrickson born in the same country?",
+        bm25_docs=[
+            _doc("d1", title="Unrelated Film", rank=1, source="bm25"),
+            _doc("d2", title="Scott Derrickson", rank=2, source="bm25"),
+        ],
+        dense_docs=[],
+        final_top_k=2,
+        rrf_k=60,
+        title_boost_weight=0.0005,
+    )
+
+    assert [doc.doc_id for doc in results] == ["d2", "d1"]
+    assert results[0].metadata["rrf_score"] == pytest.approx(1 / 62)
+    assert results[0].metadata["title_boost"] == pytest.approx(0.001)
+    assert results[0].metadata["title_overlap_tokens"] == ["derrickson", "scott"]
+    assert results[0].metadata["hybrid_score"] == pytest.approx(1 / 62 + 0.001)
+
+
 def test_hybrid_retriever_calls_both_retrievers_with_configured_top_k():
     bm25 = FakeRetriever([_doc("d1", rank=1, source="bm25")])
     dense = FakeRetriever([_doc("d2", rank=1, source="dense")])
@@ -78,10 +98,10 @@ def test_hybrid_retriever_calls_both_retrievers_with_configured_top_k():
     assert all(doc.retrieval_source == "hybrid" for doc in results)
 
 
-def _doc(doc_id, *, rank, source, score=1.0):
+def _doc(doc_id, *, rank, source, score=1.0, title=None):
     return RetrievedDoc(
         doc_id=doc_id,
-        title=f"Title {doc_id}",
+        title=title or f"Title {doc_id}",
         text=f"Text {doc_id}",
         sentences=[f"Text {doc_id}"],
         metadata={"original": source},
