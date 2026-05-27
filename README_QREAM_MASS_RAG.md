@@ -78,23 +78,23 @@ HotpotQA train + dev context
 已经跑通：
 
 ```text
-python3 scripts/prepare_data.py --limit 20 --output data/processed/hotpotqa/per_sample/dev_samples_smoke.jsonl
-python3 scripts/build_index.py --mode global-corpus --limit-train 10 --limit-dev 5
-python3 scripts/run_standard_rag.py --limit 20 --top-k 5 --output outputs/predictions/standard_rag_global_bm25_api_smoke.jsonl
-python3 scripts/evaluate.py --predictions outputs/predictions/standard_rag_global_bm25_api_smoke.jsonl
+python3 scripts/prepare_hotpotqa_per_sample.py --limit 20 --output data/processed/hotpotqa/per_sample/dev_samples_smoke.jsonl
+python3 scripts/build_hotpotqa_indexes.py --mode global-corpus --limit-train 10 --limit-dev 5
+python3 scripts/run_global_bm25_rag.py --limit 20 --top-k 5 --output outputs/predictions/standard_rag_global_bm25_api_smoke.jsonl
+python3 scripts/evaluate_prediction_metrics.py --predictions outputs/predictions/standard_rag_global_bm25_api_smoke.jsonl
 python3 -m pytest
 ```
 
 如果修改或重建了 global corpus，可以强制刷新 BM25 cache：
 
 ```bash
-python3 scripts/run_standard_rag.py --rebuild-bm25-cache --limit 1 --llm mock
+python3 scripts/run_global_bm25_rag.py --rebuild-bm25-cache --limit 1 --llm mock
 ```
 
 DashScope API 默认会限速并重试临时网络错误。网络不稳时可以显式放慢请求：
 
 ```bash
-python3 scripts/run_standard_rag.py \
+python3 scripts/run_global_bm25_rag.py \
   --limit 20 \
   --api-min-request-interval-seconds 2 \
   --api-max-retries 5 \
@@ -152,14 +152,19 @@ python3 scripts/run_standard_rag.py \
 │   └── reports/                       # 后续实验报告
 │
 ├── scripts/                           # 命令行入口
-│   ├── prepare_data.py                # raw HotpotQA -> per-sample processed JSONL
-│   ├── run_standard_rag.py            # 默认运行 global BM25 + DashScope API；支持 per-sample/mock debug
-│   ├── ask_standard_rag.py            # 单问题 demo：输入 question，在小型 HotpotQA corpus 中检索回答
-│   ├── evaluate.py                    # 汇总 prediction JSONL 指标
-│   ├── build_index.py                 # 构建 global corpus / dense embeddings / Milvus dense index
-│   ├── run_dense_retrieval.py         # 单问题 dense retrieval smoke
-│   ├── run_router_rag.py              # 后续运行 Router-RAG
-│   └── run_qream_mass_rag.py          # 后续运行 QREAM + MASS-RAG
+│   ├── prepare_hotpotqa_per_sample.py          # raw HotpotQA -> per-sample processed JSONL
+│   ├── run_global_bm25_rag.py                  # 默认运行 global BM25 + DashScope API；支持 per-sample/mock debug
+│   ├── ask_bm25_rag_demo.py                    # 单问题 demo：输入 question，在小型 HotpotQA corpus 中检索回答
+│   ├── evaluate_prediction_metrics.py          # 汇总 prediction JSONL 指标
+│   ├── build_hotpotqa_indexes.py               # 构建 global corpus / dense embeddings / Milvus dense index
+│   ├── query_milvus_dense_retrieval.py         # 单问题 dense retrieval smoke
+│   ├── diagnose_dense_retrieval.py             # 批量 dense evidence recall 诊断，不调用 LLM
+│   ├── diagnose_hybrid_retrieval.py            # 批量 BM25 + Dense hybrid evidence recall 诊断
+│   ├── diagnose_hybrid_rerank.py               # 批量 Hybrid top50 + DashScope rerank 诊断
+│   ├── run_hybrid_rerank_rag.py                # Hybrid + Rerank + DashScope answer baseline
+│   ├── analyze_prediction_bad_cases.py         # prediction JSONL bad case 分析报告
+│   ├── run_router_rag_placeholder.py           # 后续运行 Router-RAG
+│   └── run_qream_mass_rag_placeholder.py       # 后续运行 QREAM + MASS-RAG
 │
 ├── src/                               # 项目源码
 │   ├── __init__.py                    # Python package 标记
@@ -175,8 +180,8 @@ python3 scripts/run_standard_rag.py \
 │   │   ├── __init__.py
 │   │   ├── bm25.py                    # Phase 1 BM25 检索器，基于 rank_bm25 包
 │   │   ├── dense.py                   # BGE-M3 embedding 和 Dense Retriever
-│   │   ├── hybrid.py                  # 后续 BM25 + Dense 融合检索占位
-│   │   ├── reranker.py                # 后续 reranker wrapper 占位
+│   │   ├── hybrid.py                  # BM25 + Dense RRF 融合检索
+│   │   ├── reranker.py                # DashScope qwen3-rerank API wrapper
 │   │   ├── index_builder.py           # global corpus / dense index 构建逻辑
 │   │   └── milvus_store.py            # Milvus collection / insert / search 封装
 │   │

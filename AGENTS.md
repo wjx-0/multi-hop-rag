@@ -60,7 +60,7 @@ conda run -n qream-rag pip ...
 数据预处理 smoke test：
 
 ```bash
-conda run -n qream-rag python scripts/prepare_data.py \
+conda run -n qream-rag python scripts/prepare_hotpotqa_per_sample.py \
   --limit 20 \
   --output data/processed/hotpotqa/per_sample/dev_samples_smoke.jsonl
 ```
@@ -68,7 +68,7 @@ conda run -n qream-rag python scripts/prepare_data.py \
 批量 mock RAG：
 
 ```bash
-conda run -n qream-rag python scripts/run_standard_rag.py \
+conda run -n qream-rag python scripts/run_global_bm25_rag.py \
   --limit 20 \
   --top-k 5 \
   --llm mock \
@@ -78,7 +78,7 @@ conda run -n qream-rag python scripts/run_standard_rag.py \
 单问题 mock demo：
 
 ```bash
-conda run -n qream-rag python scripts/ask_standard_rag.py \
+conda run -n qream-rag python scripts/ask_bm25_rag_demo.py \
   --question "Which magazine was started first, Arthur's Magazine or First for Women?" \
   --corpus-limit 7405 \
   --top-k 5 \
@@ -108,5 +108,6 @@ DASHSCOPE_MODEL=qwen-plus
 - `PROJECT_PLAN.md`：详细实施计划。
 - `README_DATASETS.md`：数据集和 corpus 策略。
 - `README_MILVUS.md`：Milvus 计划和启动方式。
+文档要求：能使用中文尽量使用中文
 
 代码行为变化时，要同步更新相关文档。

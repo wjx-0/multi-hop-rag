@@ -519,9 +519,9 @@ src/evaluation/
 
 产出：
 
-- `scripts/prepare_data.py`
-- `scripts/run_standard_rag.py`
-- `scripts/evaluate.py`
+- `scripts/prepare_hotpotqa_per_sample.py`
+- `scripts/run_global_bm25_rag.py`
+- `scripts/evaluate_prediction_metrics.py`
 - Standard RAG 结果表。
 
 验收：
@@ -543,18 +543,21 @@ Phase 2 开始引入 Milvus 作为 dense vector store。
 
 - 构建 HotpotQA deduplicated global corpus。（已实现 JSONL corpus / dev questions / title index）
 - 实现 global BM25 Standard RAG baseline。（已实现默认 global corpus + DashScope API 路径 + BM25 cache）
+- 优化 BM25 top-k 选择。（已实现 partial top-k selection，避免 top20/top50 时完整排序）
 - 实现 Milvus vector store。（已实现 hotpotqa_global_chunks collection 封装）
 - 实现 Dense Retriever。（已实现 BGE-M3 -> Milvus dense top-k）
 - 支持 GPU 服务器离线导出 BGE-M3 embedding 分片，并在本地导入 Milvus。（已实现 `dense-embeddings` / `milvus-import-embeddings`）
-- 实现 Hybrid Retriever。
-- 接入 Reranker。
+- 实现 Hybrid Retriever。（已实现 BM25 + Dense RRF fusion 和 hybrid diagnostic）
+- 接入 Reranker。（已实现 DashScope qwen3-rerank diagnostic，不调用回答 LLM）
+- 实现 Hybrid + Rerank + answer generation baseline。（已实现 `run_hybrid_rerank_rag.py`，支持 top10/top20 上下文对比）
+- 实现 prediction bad case 分析。（已实现 `analyze_prediction_bad_cases.py`，输出 summary.md 和 bad_cases.jsonl）
 - 实现 Evidence Recall@k。
 - 实现 Supporting Fact F1。
 - 保存 retrieved_docs。
 
 产出：
 
-- BM25 vs Milvus Dense vs Hybrid vs Hybrid + Reranker 对比表。
+- BM25 vs Milvus Dense vs Hybrid vs Hybrid + Reranker vs Hybrid + Reranker + Answer 对比表。
 
 验收：
 
@@ -895,7 +898,7 @@ Global BM25 Standard RAG baseline
 5. 在 src/utils/llm_client.py 定义 LLMClient 抽象和 MockLLMClient。
 6. 在 src/pipeline/standard_rag.py 实现最小 Standard RAG。
 7. 在 src/evaluation/answer_metrics.py 实现 EM / F1。
-8. 在 scripts/run_standard_rag.py 串起第一阶段流程。
+8. 在 scripts/run_global_bm25_rag.py 串起第一阶段流程。
 9. 在 tests/ 中补最小单测。
 ```
 

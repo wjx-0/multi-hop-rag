@@ -1,4 +1,4 @@
-from scripts.build_index import parse_args
+from scripts.build_hotpotqa_indexes import parse_args
 
 
 def test_build_index_parse_args_keeps_global_corpus_mode():

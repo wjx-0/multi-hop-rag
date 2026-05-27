@@ -1,3 +1,4 @@
+# 中文说明：对单个问题执行一次 Milvus dense retrieval 查询，用于 smoke test。
 """Run a dense retrieval query against the Milvus HotpotQA collection."""
 
 from __future__ import annotations

@@ -2,14 +2,14 @@ from pathlib import Path
 
 import pytest
 
-from scripts.run_standard_rag import ensure_global_inputs_exist, load_or_build_global_bm25
+from scripts.run_global_bm25_rag import ensure_global_inputs_exist, load_or_build_global_bm25
 
 
 def test_ensure_global_inputs_exist_reports_build_index_hint(tmp_path):
     missing_corpus = tmp_path / "missing_corpus.jsonl"
     missing_questions = tmp_path / "missing_questions.jsonl"
 
-    with pytest.raises(FileNotFoundError, match="build_index.py --mode global-corpus"):
+    with pytest.raises(FileNotFoundError, match="build_hotpotqa_indexes.py --mode global-corpus"):
         ensure_global_inputs_exist(Path(missing_corpus), Path(missing_questions))
 
 

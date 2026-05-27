@@ -134,7 +134,7 @@ question
 构建 dense index smoke：
 
 ```bash
-conda run -n qream-rag python scripts/build_index.py \
+conda run -n qream-rag python scripts/build_hotpotqa_indexes.py \
   --mode milvus-dense \
   --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
   --limit 100 \
@@ -144,7 +144,7 @@ conda run -n qream-rag python scripts/build_index.py \
 本地直接构建全量 Milvus dense index：
 
 ```bash
-conda run --no-capture-output -n qream-rag python -u scripts/build_index.py \
+conda run --no-capture-output -n qream-rag python -u scripts/build_hotpotqa_indexes.py \
   --mode milvus-dense \
   --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
   --drop-existing \
@@ -154,7 +154,7 @@ conda run --no-capture-output -n qream-rag python -u scripts/build_index.py \
 如果用 GPU 服务器加速，推荐先在服务器只导出 embedding 分片：
 
 ```bash
-python -u scripts/build_index.py \
+python -u scripts/build_hotpotqa_indexes.py \
   --mode dense-embeddings \
   --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
   --embedding-output-dir data/indexes/hotpotqa_global/bge_m3_embeddings \
@@ -167,7 +167,7 @@ python -u scripts/build_index.py \
 把 `data/indexes/hotpotqa_global/bge_m3_embeddings/` 传回本地后，导入本地 Milvus：
 
 ```bash
-conda run --no-capture-output -n qream-rag python -u scripts/build_index.py \
+conda run --no-capture-output -n qream-rag python -u scripts/build_hotpotqa_indexes.py \
   --mode milvus-import-embeddings \
   --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
   --embedding-input-dir data/indexes/hotpotqa_global/bge_m3_embeddings \
@@ -178,27 +178,144 @@ conda run --no-capture-output -n qream-rag python -u scripts/build_index.py \
 单问题 dense retrieval smoke：
 
 ```bash
-conda run -n qream-rag python scripts/run_dense_retrieval.py \
+conda run -n qream-rag python scripts/query_milvus_dense_retrieval.py \
   --question "Were Scott Derrickson and Ed Wood of the same nationality?" \
   --top-k 5
 ```
 
-Hybrid retrieval：
+批量 dense retrieval diagnostic，不调用 LLM：
+
+```bash
+conda run --no-capture-output -n qream-rag python -u scripts/diagnose_dense_retrieval.py \
+  --limit 100 \
+  --top-k 50 \
+  --query-batch-size 32 \
+  --output outputs/predictions/dense_retrieval_global_100_top50.jsonl
+```
+
+汇总 evidence metrics：
+
+```bash
+conda run -n qream-rag python scripts/evaluate_prediction_metrics.py \
+  --predictions outputs/predictions/dense_retrieval_global_100_top50.jsonl
+```
+
+BM25 + Dense hybrid retrieval diagnostic：
+
+Profile A，BM25 top20 + Dense top50 -> Hybrid final top50：
+
+```bash
+conda run --no-capture-output -n qream-rag python -u scripts/diagnose_hybrid_retrieval.py \
+  --limit 100 \
+  --bm25-top-k 20 \
+  --dense-top-k 50 \
+  --final-top-k 50 \
+  --output outputs/predictions/hybrid_retrieval_global_100_bm25top20_dense50_final50.jsonl
+```
+
+Profile B，BM25 top50 + Dense top50 -> Hybrid final top50：
+
+```bash
+conda run --no-capture-output -n qream-rag python -u scripts/diagnose_hybrid_retrieval.py \
+  --limit 100 \
+  --bm25-top-k 50 \
+  --dense-top-k 50 \
+  --final-top-k 50 \
+  --output outputs/predictions/hybrid_retrieval_global_100_bm25top50_dense50_final50.jsonl
+```
+
+汇总 hybrid evidence metrics：
+
+```bash
+conda run -n qream-rag python scripts/evaluate_prediction_metrics.py \
+  --predictions outputs/predictions/hybrid_retrieval_global_100_bm25top20_dense50_final50.jsonl
+
+conda run -n qream-rag python scripts/evaluate_prediction_metrics.py \
+  --predictions outputs/predictions/hybrid_retrieval_global_100_bm25top50_dense50_final50.jsonl
+```
+
+Hybrid + DashScope reranker diagnostic，不调用回答 LLM：
+
+需要 `.env` 中配置 `DASHSCOPE_API_KEY`。可选覆盖：
+
+```text
+DASHSCOPE_RERANK_MODEL=qwen3-rerank
+DASHSCOPE_RERANK_URL=https://dashscope.aliyuncs.com/compatible-api/v1/reranks
+```
+
+```bash
+conda run --no-capture-output -n qream-rag python -u scripts/diagnose_hybrid_rerank.py \
+  --limit 20 \
+  --bm25-top-k 50 \
+  --dense-top-k 50 \
+  --hybrid-top-k 50 \
+  --rerank-top-n 50 \
+  --output outputs/predictions/rerank_hybrid_global_20_top50.jsonl
+```
+
+汇总 rerank evidence metrics：
+
+```bash
+conda run -n qream-rag python scripts/evaluate_prediction_metrics.py \
+  --predictions outputs/predictions/rerank_hybrid_global_20_top50.jsonl
+```
+
+重点看 `evidence_recall@10` / `evidence_recall@20` 是否比 Hybrid top50 更高，同时确认 `rerank_error` 接近 0、`avg_rerank_calls` 符合预期。
+
+Hybrid + Reranker + DashScope answer generation baseline：
+
+```bash
+conda run --no-capture-output -n qream-rag python -u scripts/run_hybrid_rerank_rag.py \
+  --limit 20 \
+  --bm25-top-k 50 \
+  --dense-top-k 50 \
+  --hybrid-top-k 50 \
+  --rerank-top-n 50 \
+  --answer-top-k 10 \
+  --output outputs/predictions/rerank_rag_global_20_top10.jsonl
+```
+
+对比更长上下文：
+
+```bash
+conda run --no-capture-output -n qream-rag python -u scripts/run_hybrid_rerank_rag.py \
+  --limit 20 \
+  --bm25-top-k 50 \
+  --dense-top-k 50 \
+  --hybrid-top-k 50 \
+  --rerank-top-n 50 \
+  --answer-top-k 20 \
+  --output outputs/predictions/rerank_rag_global_20_top20.jsonl
+```
+
+汇总 answer + evidence metrics：
+
+```bash
+conda run -n qream-rag python scripts/evaluate_prediction_metrics.py \
+  --predictions outputs/predictions/rerank_rag_global_20_top10.jsonl
+```
+
+生成 bad case 分析报告：
+
+```bash
+conda run -n qream-rag python scripts/analyze_prediction_bad_cases.py \
+  --predictions outputs/predictions/rerank_rag_global_20_top10.jsonl \
+  --output-dir outputs/reports/rerank_rag_global_20_top10
+```
+
+Hybrid + reranker RAG：
 
 ```text
 question
   -> BM25 top-k
   -> Milvus dense top-k
-  -> normalize scores
-  -> weighted fusion
-  -> reranker
+  -> RRF fusion
+  -> DashScope qwen3-rerank
+  -> top-k evidence
+  -> DashScope answer generation
 ```
 
-默认融合：
-
-```python
-final_score = 0.5 * dense_score + 0.5 * bm25_score
-```
+当前第一版 hybrid 使用 RRF，避免直接混合 BM25 分数和 dense cosine 分数。
 
 ---
 
@@ -225,7 +342,7 @@ build global corpus
 
 ```text
 src/retrieval/milvus_store.py
-scripts/build_index.py
+scripts/build_hotpotqa_indexes.py
 ```
 
 ---

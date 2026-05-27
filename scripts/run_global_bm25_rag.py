@@ -1,3 +1,4 @@
+# 中文说明：运行 global BM25 Standard RAG baseline，支持 DashScope API 或 mock LLM。
 """Run Standard RAG over the default global HotpotQA corpus."""
 
 from __future__ import annotations
@@ -45,7 +46,7 @@ def ensure_global_inputs_exist(corpus_path: Path, questions_path: Path) -> None:
 
     raise FileNotFoundError(
         "Global corpus files are missing. Run "
-        "`conda run -n qream-rag python scripts/build_index.py --mode global-corpus` first."
+        "`conda run -n qream-rag python scripts/build_hotpotqa_indexes.py --mode global-corpus` first."
     )
 
 

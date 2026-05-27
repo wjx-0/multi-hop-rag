@@ -1,3 +1,4 @@
+# 中文说明：运行一个单问题 BM25 RAG demo，用于快速检查检索和回答链路。
 """Ask one question against a small HotpotQA BM25 demo corpus."""
 
 from __future__ import annotations

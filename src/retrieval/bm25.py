@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import pickle
 from pathlib import Path
 from typing import Any
@@ -43,7 +44,14 @@ class BM25Retriever:
 
     def retrieve(self, query: str, *, top_k: int = 5) -> list[RetrievedDoc]:
         scores = self.score(query)
-        ranked = sorted(enumerate(scores), key=lambda item: item[1], reverse=True)[:top_k]
+        if top_k <= 0:
+            return []
+
+        scored_docs = enumerate(scores)
+        if top_k >= len(scores):
+            ranked = sorted(scored_docs, key=lambda item: item[1], reverse=True)
+        else:
+            ranked = heapq.nlargest(top_k, scored_docs, key=lambda item: item[1])
 
         results: list[RetrievedDoc] = []
         for rank, (index, score) in enumerate(ranked, start=1):

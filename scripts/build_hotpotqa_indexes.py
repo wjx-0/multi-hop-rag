@@ -1,4 +1,5 @@
-"""Build retrieval indexes and corpus artifacts."""
+# 中文说明：构建 HotpotQA global corpus、BM25/Dense/Milvus 相关索引和 embedding 分片。
+"""Build retrieval indexes and corpus artifacts.负责构建数据和索引"""
 
 from __future__ import annotations
 

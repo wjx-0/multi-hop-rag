@@ -1,3 +1,4 @@
+# 中文说明：把 HotpotQA raw JSON 预处理成早期 per-sample JSONL 调试数据。
 """Prepare HotpotQA per-sample JSONL files."""
 
 from __future__ import annotations
