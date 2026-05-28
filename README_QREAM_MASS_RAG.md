@@ -180,6 +180,7 @@ conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
 │   ├── query_milvus_dense_retrieval.py         # 单问题 dense retrieval smoke
 │   ├── diagnose_dense_retrieval.py             # 批量 dense evidence recall 诊断，不调用 LLM
 │   ├── diagnose_hybrid_retrieval.py            # 批量 BM25 + Dense hybrid evidence recall 诊断
+│   ├── diagnose_decomposed_hybrid_retrieval.py # 批量 LLM 查询分解 + Hybrid evidence recall 诊断
 │   ├── diagnose_hybrid_rerank.py               # 批量 Hybrid top50 + 本地/DashScope rerank 诊断
 │   ├── run_hybrid_rerank_rag.py                # Hybrid + Rerank + DashScope answer baseline
 │   ├── analyze_prediction_bad_cases.py         # prediction JSONL bad case 分析报告
@@ -199,8 +200,10 @@ conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
 │   ├── retrieval/                     # BM25、Dense、Hybrid、Reranker、Milvus
 │   │   ├── __init__.py
 │   │   ├── bm25.py                    # Phase 1 BM25 检索器，基于 rank_bm25 包
+│   │   ├── decomposed_hybrid.py       # 多 query BM25/Dense RRF 融合
 │   │   ├── dense.py                   # BGE-M3 embedding 和 Dense Retriever
 │   │   ├── hybrid.py                  # BM25 + Dense RRF 融合检索
+│   │   ├── query_decomposition.py     # LLM 查询分解和 JSONL cache
 │   │   ├── reranker.py                # 本地 Qwen3 reranker + DashScope qwen3-rerank API wrapper
 │   │   ├── index_builder.py           # global corpus / dense index 构建逻辑
 │   │   └── milvus_store.py            # Milvus collection / insert / search 封装
@@ -264,7 +267,7 @@ conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
 | Module | Key Files | Responsibility |
 |---|---|---|
 | `src/data/` | `schema.py`, `load_hotpotqa.py`, `build_corpus.py`, `preprocess.py` | 定义核心数据结构，读取 HotpotQA，将 paragraph 转成 Document chunks |
-| `src/retrieval/` | `bm25.py`, `dense.py`, `hybrid.py`, `reranker.py`, `milvus_store.py` | Phase 1 已用 `rank_bm25` 实现 BM25；后续接 Milvus dense retrieval、hybrid fusion 和 reranker |
+| `src/retrieval/` | `bm25.py`, `dense.py`, `hybrid.py`, `decomposed_hybrid.py`, `query_decomposition.py`, `reranker.py`, `milvus_store.py` | Phase 1 已用 `rank_bm25` 实现 BM25；Phase 2 已接 Milvus dense retrieval、hybrid fusion、查询分解诊断和 reranker |
 | `src/pipeline/` | `standard_rag.py`, `router_rag.py`, `qream_mass_rag.py` | 编排端到端流程；当前已实现 Standard RAG smoke baseline |
 | `src/evaluation/` | `answer_metrics.py`, `evidence_metrics.py`, `citation_metrics.py`, `route_metrics.py`, `cost_metrics.py` | 当前已实现 Answer EM/F1；后续补证据、引用、路由和成本指标 |
 | `src/utils/` | `io.py`, `text.py`, `llm_client.py`, `logger.py` | 通用 IO、文本归一化、LLMClient 抽象和日志工具 |

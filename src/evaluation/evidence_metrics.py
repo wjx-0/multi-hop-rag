@@ -65,6 +65,19 @@ def evidence_hit_at_k(
     return float(evidence_recall_at_k(retrieved_docs, gold_supporting_facts, k=k) > 0.0)
 
 
+def evidence_full_hit_at_k(
+    retrieved_docs: list[dict[str, Any] | RetrievedDoc],
+    gold_supporting_facts: list[list[Any]],
+    *,
+    k: int,
+) -> float:
+    gold_titles = gold_evidence_titles(gold_supporting_facts)
+    if not gold_titles:
+        return 0.0
+    retrieved_titles = {_doc_title(doc) for doc in retrieved_docs[:k]}
+    return float(gold_titles.issubset(retrieved_titles))
+
+
 def supporting_fact_f1(
     predicted_supporting_facts: list[Any],
     gold_supporting_facts: list[list[Any]],
@@ -113,6 +126,11 @@ def evidence_metrics(
             k=k,
         )
         metrics[f"evidence_hit@{k}"] = evidence_hit_at_k(
+            retrieved_docs,
+            gold_supporting_facts,
+            k=k,
+        )
+        metrics[f"evidence_full_hit@{k}"] = evidence_full_hit_at_k(
             retrieved_docs,
             gold_supporting_facts,
             k=k,

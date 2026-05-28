@@ -1,6 +1,7 @@
 from src.evaluation.answer_metrics import answer_metrics
 from src.evaluation.evidence_metrics import (
     evidence_metrics,
+    evidence_full_hit_at_k,
     evidence_recall_at_k,
     supporting_fact_f1,
 )
@@ -22,6 +23,18 @@ def test_evidence_recall_at_k_uses_gold_supporting_titles():
 
     assert evidence_recall_at_k(retrieved_docs, gold_supporting_facts, k=2) == 0.5
     assert evidence_recall_at_k(retrieved_docs, gold_supporting_facts, k=3) == 1.0
+
+
+def test_evidence_full_hit_at_k_requires_all_gold_titles():
+    retrieved_docs = [
+        {"title": "Arthur's Magazine", "rank": 1},
+        {"title": "Some Distractor", "rank": 2},
+        {"title": "First for Women", "rank": 3},
+    ]
+    gold_supporting_facts = [["Arthur's Magazine", 1], ["First for Women", 1]]
+
+    assert evidence_full_hit_at_k(retrieved_docs, gold_supporting_facts, k=2) == 0.0
+    assert evidence_full_hit_at_k(retrieved_docs, gold_supporting_facts, k=3) == 1.0
 
 
 def test_supporting_fact_f1_requires_title_and_sentence_match():
@@ -52,5 +65,7 @@ def test_evidence_metrics_combines_recall_hit_and_supporting_fact_f1():
 
     assert metrics["evidence_recall@1"] == 0.5
     assert metrics["evidence_hit@1"] == 1.0
+    assert metrics["evidence_full_hit@1"] == 0.0
     assert metrics["evidence_recall@2"] == 1.0
+    assert metrics["evidence_full_hit@2"] == 1.0
     assert metrics["supporting_fact_f1"] == 2 / 3
