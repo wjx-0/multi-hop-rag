@@ -19,6 +19,12 @@ def test_run_rerank_rag_parse_args():
             "50",
             "--rerank-top-n",
             "25",
+            "--reranker-backend",
+            "local",
+            "--local-reranker-batch-size",
+            "2",
+            "--local-reranker-max-length",
+            "512",
             "--answer-top-k",
             "10",
             "--title-boost-weight",
@@ -37,6 +43,9 @@ def test_run_rerank_rag_parse_args():
     assert args.dense_top_k == 60
     assert args.hybrid_top_k == 50
     assert args.rerank_top_n == 25
+    assert args.reranker_backend == "local"
+    assert args.local_reranker_batch_size == 2
+    assert args.local_reranker_max_length == 512
     assert args.answer_top_k == 10
     assert args.title_boost_weight == 0.0007
     assert args.llm == "mock"

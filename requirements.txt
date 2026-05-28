@@ -5,3 +5,4 @@ pymilvus==2.6.11
 rank-bm25==0.2.2
 pytest==8.4.2
 sentence-transformers==5.1.2
+transformers>=4.51.0

@@ -5,6 +5,8 @@ from src.retrieval.reranker import (
     DashScopeReranker,
     dashscope_response_to_reranked_docs,
     fallback_rerank_docs,
+    local_reranker_input_text,
+    local_scores_to_reranked_docs,
     reranker_document_text,
 )
 
@@ -110,6 +112,44 @@ def test_fallback_rerank_docs_preserves_original_order_and_source():
     assert [doc.rank for doc in results] == [1, 2]
     assert [doc.retrieval_source for doc in results] == ["hybrid", "hybrid"]
     assert results[0] is not docs[0]
+
+
+def test_local_reranker_input_text_uses_instruct_query_and_document():
+    text = local_reranker_input_text(
+        instruct="Find answer passages.",
+        query="Question?",
+        document="Title\nParagraph.",
+    )
+
+    assert text == "<Instruct>: Find answer passages.\n<Query>: Question?\n<Document>: Title\nParagraph."
+
+
+def test_local_scores_to_reranked_docs_orders_by_score():
+    docs = [
+        _doc("d1", rank=1, score=0.2),
+        _doc("d2", rank=2, score=0.1),
+        _doc("d3", rank=3, score=0.3),
+    ]
+
+    results = local_scores_to_reranked_docs(
+        docs,
+        [0.4, 0.9, 0.7],
+        model="Qwen/Qwen3-Reranker-0.6B",
+        top_n=2,
+    )
+
+    assert [doc.doc_id for doc in results] == ["d2", "d3"]
+    assert [doc.rank for doc in results] == [1, 2]
+    assert all(doc.retrieval_source == "reranker" for doc in results)
+    assert results[0].score == pytest.approx(0.9)
+    assert results[0].metadata["reranker_model"] == "Qwen/Qwen3-Reranker-0.6B"
+    assert results[0].metadata["reranker_backend"] == "local"
+    assert results[0].metadata["pre_rerank_rank"] == 2
+
+
+def test_local_scores_to_reranked_docs_requires_matching_lengths():
+    with pytest.raises(ValueError):
+        local_scores_to_reranked_docs([_doc("d1", rank=1)], [], model="local")
 
 
 def test_dashscope_response_requires_results_list():

@@ -102,7 +102,24 @@ python3 scripts/run_global_bm25_rag.py \
   --api-retry-backoff-seconds 2
 ```
 
-当前还没有实现 Router、QREAM、多 Agent、Milvus vector index。
+Hybrid rerank 脚本默认使用本地 `Qwen/Qwen3-Reranker-0.6B`，从 Hugging Face cache 离线加载，不再要求 rerank 阶段调用 DashScope API：
+
+```bash
+conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
+  --limit 20 \
+  --reranker-backend local \
+  --local-reranker-batch-size 4
+```
+
+如需切回 DashScope `qwen3-rerank` API，可以显式指定：
+
+```bash
+conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
+  --limit 20 \
+  --reranker-backend dashscope
+```
+
+当前还没有实现 Router、QREAM、多 Agent；Milvus vector index 已在 Phase 2 baseline 中使用。
 
 ---
 
@@ -163,7 +180,7 @@ python3 scripts/run_global_bm25_rag.py \
 │   ├── query_milvus_dense_retrieval.py         # 单问题 dense retrieval smoke
 │   ├── diagnose_dense_retrieval.py             # 批量 dense evidence recall 诊断，不调用 LLM
 │   ├── diagnose_hybrid_retrieval.py            # 批量 BM25 + Dense hybrid evidence recall 诊断
-│   ├── diagnose_hybrid_rerank.py               # 批量 Hybrid top50 + DashScope rerank 诊断
+│   ├── diagnose_hybrid_rerank.py               # 批量 Hybrid top50 + 本地/DashScope rerank 诊断
 │   ├── run_hybrid_rerank_rag.py                # Hybrid + Rerank + DashScope answer baseline
 │   ├── analyze_prediction_bad_cases.py         # prediction JSONL bad case 分析报告
 │   ├── run_router_rag_placeholder.py           # 后续运行 Router-RAG
@@ -184,7 +201,7 @@ python3 scripts/run_global_bm25_rag.py \
 │   │   ├── bm25.py                    # Phase 1 BM25 检索器，基于 rank_bm25 包
 │   │   ├── dense.py                   # BGE-M3 embedding 和 Dense Retriever
 │   │   ├── hybrid.py                  # BM25 + Dense RRF 融合检索
-│   │   ├── reranker.py                # DashScope qwen3-rerank API wrapper
+│   │   ├── reranker.py                # 本地 Qwen3 reranker + DashScope qwen3-rerank API wrapper
 │   │   ├── index_builder.py           # global corpus / dense index 构建逻辑
 │   │   └── milvus_store.py            # Milvus collection / insert / search 封装
 │   │

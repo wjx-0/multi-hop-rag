@@ -548,7 +548,7 @@ Phase 2 开始引入 Milvus 作为 dense vector store。
 - 实现 Dense Retriever。（已实现 BGE-M3 -> Milvus dense top-k）
 - 支持 GPU 服务器离线导出 BGE-M3 embedding 分片，并在本地导入 Milvus。（已实现 `dense-embeddings` / `milvus-import-embeddings`）
 - 实现 Hybrid Retriever。（已实现 BM25 + Dense RRF fusion 和 hybrid diagnostic）
-- 接入 Reranker。（已实现 DashScope qwen3-rerank diagnostic，不调用回答 LLM）
+- 接入 Reranker。（已实现本地 Qwen3-Reranker-0.6B / DashScope qwen3-rerank 两种 backend；diagnostic 不调用回答 LLM）
 - 实现 Hybrid + Rerank + answer generation baseline。（已实现 `run_hybrid_rerank_rag.py`，支持 top10/top20 上下文对比）
 - 实现 prediction bad case 分析。（已实现 `analyze_prediction_bad_cases.py`，输出 summary.md 和 bad_cases.jsonl）
 - 实现 Evidence Recall@k。
@@ -885,6 +885,7 @@ BM25 + Dense RRF Hybrid retrieval
 Hybrid title boost
 Elasticsearch BM25 backend performance branch
 DashScope reranker diagnostic
+Local Qwen3 reranker backend
 Hybrid + Reranker RAG generation baseline
 ```
 
