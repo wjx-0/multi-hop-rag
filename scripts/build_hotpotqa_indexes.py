@@ -19,9 +19,19 @@ from src.retrieval.elasticsearch_bm25 import (
     DEFAULT_ELASTICSEARCH_URL,
     build_elasticsearch_bm25_index,
 )
+from src.retrieval.faiss_store import (
+    DEFAULT_FAISS_DOCSTORE_PATH,
+    DEFAULT_FAISS_EF_CONSTRUCTION,
+    DEFAULT_FAISS_EF_SEARCH,
+    DEFAULT_FAISS_HNSW_M,
+    DEFAULT_FAISS_INDEX_PATH,
+    DEFAULT_FAISS_INDEX_TYPE,
+)
 from src.retrieval.index_builder import (
+    build_faiss_dense_index,
     build_milvus_dense_index,
     export_dense_embeddings,
+    import_dense_embeddings_to_faiss,
     import_dense_embeddings_to_milvus,
 )
 from src.retrieval.milvus_store import MilvusHotpotStore
@@ -37,6 +47,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "milvus-dense",
             "dense-embeddings",
             "milvus-import-embeddings",
+            "faiss-dense",
+            "faiss-import-embeddings",
             "elasticsearch-bm25",
         ],
         default="global-corpus",
@@ -69,6 +81,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--milvus-collection-name", default="hotpotqa_global_chunks")
     parser.add_argument("--milvus-metric-type", default="COSINE")
     parser.add_argument("--milvus-insert-batch-size", type=int, default=1024)
+    parser.add_argument("--faiss-index", default=DEFAULT_FAISS_INDEX_PATH)
+    parser.add_argument("--faiss-docstore", default=DEFAULT_FAISS_DOCSTORE_PATH)
+    parser.add_argument("--faiss-index-type", choices=["flat", "hnsw"], default=DEFAULT_FAISS_INDEX_TYPE)
+    parser.add_argument("--faiss-metric-type", default="COSINE")
+    parser.add_argument("--faiss-hnsw-m", type=int, default=DEFAULT_FAISS_HNSW_M)
+    parser.add_argument("--faiss-ef-construction", type=int, default=DEFAULT_FAISS_EF_CONSTRUCTION)
+    parser.add_argument("--faiss-ef-search", type=int, default=DEFAULT_FAISS_EF_SEARCH)
     parser.add_argument("--dense-meta-output", default="data/indexes/hotpotqa_global/dense_build_meta.json")
     parser.add_argument("--elasticsearch-url", default=DEFAULT_ELASTICSEARCH_URL)
     parser.add_argument("--elasticsearch-index", default=DEFAULT_ELASTICSEARCH_INDEX)
@@ -138,6 +157,54 @@ def main() -> None:
             "imported "
             f"{metadata['inserted_count']} exported embeddings into {args.milvus_collection_name}"
         )
+        return
+
+    if args.mode == "faiss-import-embeddings":
+        metadata = import_dense_embeddings_to_faiss(
+            corpus_path=args.corpus_input,
+            embeddings_dir=args.embedding_input_dir,
+            index_path=args.faiss_index,
+            docstore_path=args.faiss_docstore,
+            limit=args.limit,
+            overwrite=args.drop_existing,
+            metadata_output_path=args.dense_meta_output,
+            metric_type=args.faiss_metric_type,
+            index_type=args.faiss_index_type,
+            hnsw_m=args.faiss_hnsw_m,
+            ef_construction=args.faiss_ef_construction,
+            ef_search=args.faiss_ef_search,
+        )
+        print(
+            "imported "
+            f"{metadata['inserted_count']} exported embeddings into FAISS {args.faiss_index}"
+        )
+        return
+
+    if args.mode == "faiss-dense":
+        embedder = SentenceTransformerEmbedder(
+            model_name=args.embedding_model,
+            batch_size=args.embedding_batch_size,
+            normalize=True,
+            device=args.embedding_device,
+        )
+        metadata = build_faiss_dense_index(
+            corpus_path=args.corpus_input,
+            index_path=args.faiss_index,
+            docstore_path=args.faiss_docstore,
+            embedder=embedder,
+            batch_size=args.embedding_batch_size,
+            limit=args.limit,
+            overwrite=args.drop_existing,
+            metadata_output_path=args.dense_meta_output,
+            embedding_model=args.embedding_model,
+            dimension=args.embedding_dimension,
+            metric_type=args.faiss_metric_type,
+            index_type=args.faiss_index_type,
+            hnsw_m=args.faiss_hnsw_m,
+            ef_construction=args.faiss_ef_construction,
+            ef_search=args.faiss_ef_search,
+        )
+        print(f"built dense FAISS index with {metadata['inserted_count']} vectors")
         return
 
     if args.mode == "milvus-dense":

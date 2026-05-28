@@ -9,6 +9,8 @@ def test_run_rerank_diagnostic_parse_args():
             "20",
             "--bm25-backend",
             "elasticsearch",
+            "--dense-backend",
+            "faiss",
             "--elasticsearch-index",
             "hotpotqa_test",
             "--bm25-top-k",
@@ -40,6 +42,7 @@ def test_run_rerank_diagnostic_parse_args():
 
     assert args.limit == 20
     assert args.bm25_backend == "elasticsearch"
+    assert args.dense_backend == "faiss"
     assert args.elasticsearch_index == "hotpotqa_test"
     assert args.bm25_top_k == 40
     assert args.dense_top_k == 60

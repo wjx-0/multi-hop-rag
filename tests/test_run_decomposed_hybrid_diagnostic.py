@@ -15,6 +15,8 @@ def test_decomposed_hybrid_diagnostic_parse_args():
             "uniform",
             "--bm25-backend",
             "elasticsearch",
+            "--dense-backend",
+            "faiss",
             "--bm25-top-k",
             "20",
             "--dense-top-k",
@@ -35,6 +37,7 @@ def test_decomposed_hybrid_diagnostic_parse_args():
     assert args.sample_size == 100
     assert args.sample_strategy == "uniform"
     assert args.bm25_backend == "elasticsearch"
+    assert args.dense_backend == "faiss"
     assert args.bm25_top_k == 20
     assert args.dense_top_k == 30
     assert args.final_top_k == 50

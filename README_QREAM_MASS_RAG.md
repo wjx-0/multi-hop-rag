@@ -119,7 +119,24 @@ conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
   --reranker-backend dashscope
 ```
 
-当前还没有实现 Router、QREAM、多 Agent；Milvus vector index 已在 Phase 2 baseline 中使用。
+如果服务器无法使用 Docker/Milvus，可以构建本地 FAISS dense index，并在诊断脚本里切换后端：
+
+```bash
+python scripts/build_hotpotqa_indexes.py \
+  --mode faiss-dense \
+  --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
+  --drop-existing \
+  --embedding-device cuda \
+  --embedding-batch-size 64
+
+python scripts/diagnose_hybrid_retrieval.py \
+  --sample-size 100 \
+  --sample-strategy uniform \
+  --bm25-backend elasticsearch \
+  --dense-backend faiss
+```
+
+当前还没有实现 Router、QREAM、多 Agent；Milvus vector index 已在 Phase 2 baseline 中使用。服务器无法使用 Docker/Milvus 时，可切换到本地 FAISS dense backend。
 
 ---
 
@@ -151,10 +168,12 @@ conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
 │   │   └── hotpotqa/
 │   │       ├── per_sample/            # Phase 1 processed JSONL 输出
 │   │       └── global/                # Phase 2 corpus.jsonl / questions_dev.jsonl / title_to_doc_ids.json
-│   └── indexes/                       # BM25 cache、Milvus 元数据、GPU embedding 分片
+│   └── indexes/                       # BM25 cache、Milvus/FAISS 元数据、GPU embedding 分片
 │       └── hotpotqa_global/
 │           ├── bm25.pkl               # global BM25 cache，本地生成
-│           ├── dense_build_meta.json  # dense / Milvus 构建记录
+│           ├── dense_build_meta.json  # dense / Milvus / FAISS 构建记录
+│           ├── faiss_bge_m3.index     # 可选：本地 FAISS dense index
+│           ├── faiss_bge_m3_docs.jsonl # 可选：FAISS row_id -> Document docstore
 │           └── bge_m3_embeddings/     # GPU 服务器导出的 embedding .npz 分片
 │
 ├── infra/
@@ -176,8 +195,8 @@ conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
 │   ├── run_global_bm25_rag.py                  # 默认运行 global BM25 + DashScope API；支持 per-sample/mock debug
 │   ├── ask_bm25_rag_demo.py                    # 单问题 demo：输入 question，在小型 HotpotQA corpus 中检索回答
 │   ├── evaluate_prediction_metrics.py          # 汇总 prediction JSONL 指标
-│   ├── build_hotpotqa_indexes.py               # 构建 global corpus / dense embeddings / Milvus dense index
-│   ├── query_milvus_dense_retrieval.py         # 单问题 dense retrieval smoke
+│   ├── build_hotpotqa_indexes.py               # 构建 global corpus / dense embeddings / Milvus 或 FAISS dense index
+│   ├── query_milvus_dense_retrieval.py         # 单问题 dense retrieval smoke，支持 Milvus / FAISS 后端
 │   ├── diagnose_dense_retrieval.py             # 批量 dense evidence recall 诊断，不调用 LLM
 │   ├── diagnose_hybrid_retrieval.py            # 批量 BM25 + Dense hybrid evidence recall 诊断
 │   ├── diagnose_decomposed_hybrid_retrieval.py # 批量 LLM 查询分解 + Hybrid evidence recall 诊断
@@ -197,11 +216,13 @@ conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
 │   │   ├── build_corpus.py            # context paragraph -> Document chunk；supporting_facts 校验
 │   │   └── preprocess.py              # raw samples -> processed per-sample JSONL
 │   │
-│   ├── retrieval/                     # BM25、Dense、Hybrid、Reranker、Milvus
+│   ├── retrieval/                     # BM25、Dense、Hybrid、Reranker、Milvus / FAISS
 │   │   ├── __init__.py
 │   │   ├── bm25.py                    # Phase 1 BM25 检索器，基于 rank_bm25 包
 │   │   ├── decomposed_hybrid.py       # 多 query BM25/Dense RRF 融合
 │   │   ├── dense.py                   # BGE-M3 embedding 和 Dense Retriever
+│   │   ├── dense_backend.py           # Dense store 后端选择：Milvus / FAISS
+│   │   ├── faiss_store.py             # FAISS index / docstore / search 封装
 │   │   ├── hybrid.py                  # BM25 + Dense RRF 融合检索
 │   │   ├── query_decomposition.py     # LLM 查询分解和 JSONL cache
 │   │   ├── reranker.py                # 本地 Qwen3 reranker + DashScope qwen3-rerank API wrapper
@@ -267,7 +288,7 @@ conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
 | Module | Key Files | Responsibility |
 |---|---|---|
 | `src/data/` | `schema.py`, `load_hotpotqa.py`, `build_corpus.py`, `preprocess.py` | 定义核心数据结构，读取 HotpotQA，将 paragraph 转成 Document chunks |
-| `src/retrieval/` | `bm25.py`, `dense.py`, `hybrid.py`, `decomposed_hybrid.py`, `query_decomposition.py`, `reranker.py`, `milvus_store.py` | Phase 1 已用 `rank_bm25` 实现 BM25；Phase 2 已接 Milvus dense retrieval、hybrid fusion、查询分解诊断和 reranker |
+| `src/retrieval/` | `bm25.py`, `dense.py`, `dense_backend.py`, `hybrid.py`, `decomposed_hybrid.py`, `query_decomposition.py`, `reranker.py`, `milvus_store.py`, `faiss_store.py` | Phase 1 已用 `rank_bm25` 实现 BM25；Phase 2 已接 Milvus / FAISS dense retrieval、hybrid fusion、查询分解诊断和 reranker |
 | `src/pipeline/` | `standard_rag.py`, `router_rag.py`, `qream_mass_rag.py` | 编排端到端流程；当前已实现 Standard RAG smoke baseline |
 | `src/evaluation/` | `answer_metrics.py`, `evidence_metrics.py`, `citation_metrics.py`, `route_metrics.py`, `cost_metrics.py` | 当前已实现 Answer EM/F1；后续补证据、引用、路由和成本指标 |
 | `src/utils/` | `io.py`, `text.py`, `llm_client.py`, `logger.py` | 通用 IO、文本归一化、LLMClient 抽象和日志工具 |

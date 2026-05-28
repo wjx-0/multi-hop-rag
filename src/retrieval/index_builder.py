@@ -12,6 +12,14 @@ from src.data.load_hotpotqa import iter_documents_jsonl
 from src.data.schema import Document
 from src.retrieval.bm25 import corpus_fingerprint
 from src.retrieval.dense import Embedder, document_embedding_text
+from src.retrieval.faiss_store import (
+    DEFAULT_FAISS_EF_CONSTRUCTION,
+    DEFAULT_FAISS_EF_SEARCH,
+    DEFAULT_FAISS_HNSW_M,
+    DEFAULT_FAISS_INDEX_TYPE,
+    make_faiss_index,
+    write_faiss_docstore_record,
+)
 from src.retrieval.milvus_store import MilvusHotpotStore
 from src.utils.io import write_json
 
@@ -215,6 +223,160 @@ def import_dense_embeddings_to_milvus(
     return metadata
 
 
+def build_faiss_dense_index(
+    *,
+    corpus_path: str | Path,
+    index_path: str | Path,
+    docstore_path: str | Path,
+    embedder: Embedder,
+    batch_size: int = 16,
+    limit: int | None = None,
+    overwrite: bool = False,
+    metadata_output_path: str | Path = "data/indexes/hotpotqa_global/faiss_build_meta.json",
+    embedding_model: str = "BAAI/bge-m3",
+    dimension: int = 1024,
+    metric_type: str = "COSINE",
+    index_type: str = DEFAULT_FAISS_INDEX_TYPE,
+    hnsw_m: int = DEFAULT_FAISS_HNSW_M,
+    ef_construction: int = DEFAULT_FAISS_EF_CONSTRUCTION,
+    ef_search: int = DEFAULT_FAISS_EF_SEARCH,
+) -> dict[str, Any]:
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive.")
+
+    started = perf_counter()
+    index_output_path = Path(index_path)
+    docstore_output_path = Path(docstore_path)
+    _prepare_faiss_outputs(index_output_path, docstore_output_path, overwrite=overwrite)
+    index = make_faiss_index(
+        dimension=dimension,
+        metric_type=metric_type,
+        index_type=index_type,
+        hnsw_m=hnsw_m,
+        ef_construction=ef_construction,
+    )
+
+    inserted_count = 0
+    documents = iter_documents_jsonl(corpus_path, limit=limit)
+    with docstore_output_path.open("w", encoding="utf-8") as docstore_file:
+        for batch in iter_batches(documents, batch_size):
+            texts = [document_embedding_text(doc.title, doc.text) for doc in batch]
+            embeddings = embedder.encode_texts(texts)
+            _add_embeddings_to_faiss_index(index, embeddings, dimension)
+            for document in batch:
+                write_faiss_docstore_record(docstore_file, document)
+            inserted_count += len(batch)
+            print(f"added {inserted_count} dense vectors to FAISS")
+
+    _write_faiss_index(index, index_output_path, ef_search=ef_search)
+    metadata = _faiss_metadata(
+        corpus_path=corpus_path,
+        index_path=index_output_path,
+        docstore_path=docstore_output_path,
+        embedding_model=embedding_model,
+        dimension=dimension,
+        metric_type=metric_type,
+        index_type=index_type,
+        hnsw_m=hnsw_m,
+        ef_construction=ef_construction,
+        ef_search=ef_search,
+        inserted_count=inserted_count,
+        started=started,
+    )
+    write_json(metadata, metadata_output_path)
+    return metadata
+
+
+def import_dense_embeddings_to_faiss(
+    *,
+    corpus_path: str | Path,
+    embeddings_dir: str | Path,
+    index_path: str | Path,
+    docstore_path: str | Path,
+    limit: int | None = None,
+    overwrite: bool = False,
+    metadata_output_path: str | Path = "data/indexes/hotpotqa_global/faiss_build_meta.json",
+    metric_type: str = "COSINE",
+    index_type: str = DEFAULT_FAISS_INDEX_TYPE,
+    hnsw_m: int = DEFAULT_FAISS_HNSW_M,
+    ef_construction: int = DEFAULT_FAISS_EF_CONSTRUCTION,
+    ef_search: int = DEFAULT_FAISS_EF_SEARCH,
+) -> dict[str, Any]:
+    started = perf_counter()
+    embeddings_path = Path(embeddings_dir)
+    manifest = _load_embedding_manifest(embeddings_path)
+    expected_fingerprint = manifest.get("corpus_fingerprint")
+    actual_fingerprint = portable_corpus_fingerprint(corpus_path)
+    if expected_fingerprint != actual_fingerprint:
+        raise ValueError(
+            "Embedding manifest corpus fingerprint does not match corpus input. "
+            "Use the same corpus.jsonl that was used to export embeddings."
+        )
+
+    dimension = int(manifest.get("dimension", 0))
+    if dimension <= 0:
+        raise ValueError("Embedding manifest has invalid dimension.")
+    exported_count = int(manifest.get("exported_count", 0))
+    target_count = min(exported_count, limit) if limit is not None else exported_count
+
+    index_output_path = Path(index_path)
+    docstore_output_path = Path(docstore_path)
+    _prepare_faiss_outputs(index_output_path, docstore_output_path, overwrite=overwrite)
+    index = make_faiss_index(
+        dimension=dimension,
+        metric_type=metric_type,
+        index_type=index_type,
+        hnsw_m=hnsw_m,
+        ef_construction=ef_construction,
+    )
+
+    inserted_count = 0
+    remaining = target_count
+    documents = iter(iter_documents_jsonl(corpus_path, limit=target_count))
+    with docstore_output_path.open("w", encoding="utf-8") as docstore_file:
+        for shard in manifest.get("shards", []):
+            if remaining <= 0:
+                break
+
+            shard_doc_ids, shard_embeddings = _read_embedding_shard(embeddings_path, shard)
+            take_count = min(len(shard_doc_ids), remaining)
+            shard_doc_ids = shard_doc_ids[:take_count]
+            shard_embeddings = shard_embeddings[:take_count]
+            docs_batch = _next_documents(documents, take_count)
+            _validate_doc_id_alignment(docs_batch, shard_doc_ids, inserted_count)
+            _add_embeddings_to_faiss_index(index, shard_embeddings, dimension)
+            for document in docs_batch:
+                write_faiss_docstore_record(docstore_file, document)
+
+            inserted_count += take_count
+            remaining -= take_count
+            print(f"added {inserted_count} exported dense vectors to FAISS")
+
+    if inserted_count != target_count:
+        raise ValueError(
+            f"Imported {inserted_count} embeddings into FAISS, expected {target_count} from manifest."
+        )
+
+    _write_faiss_index(index, index_output_path, ef_search=ef_search)
+    metadata = _faiss_metadata(
+        corpus_path=corpus_path,
+        index_path=index_output_path,
+        docstore_path=docstore_output_path,
+        embedding_model=str(manifest.get("embedding_model", "")),
+        dimension=dimension,
+        metric_type=metric_type,
+        index_type=index_type,
+        hnsw_m=hnsw_m,
+        ef_construction=ef_construction,
+        ef_search=ef_search,
+        inserted_count=inserted_count,
+        started=started,
+    )
+    metadata["source_embedding_manifest"] = str((embeddings_path / EMBEDDING_MANIFEST_NAME).resolve())
+    write_json(metadata, metadata_output_path)
+    return metadata
+
+
 def portable_corpus_fingerprint(path: str | Path) -> dict[str, Any]:
     corpus_path = Path(path)
     stat = corpus_path.stat()
@@ -284,6 +446,73 @@ def _load_embedding_manifest(embeddings_dir: Path) -> dict[str, Any]:
     if not isinstance(manifest, dict):
         raise ValueError(f"Invalid embedding manifest: {manifest_path}")
     return manifest
+
+
+def _prepare_faiss_outputs(index_path: Path, docstore_path: Path, *, overwrite: bool) -> None:
+    existing_outputs = [path for path in (index_path, docstore_path) if path.exists()]
+    if existing_outputs and not overwrite:
+        existing = ", ".join(str(path) for path in existing_outputs)
+        raise FileExistsError(
+            f"FAISS outputs already exist: {existing}. Pass --drop-existing to overwrite them."
+        )
+
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    docstore_path.parent.mkdir(parents=True, exist_ok=True)
+    if overwrite:
+        for path in existing_outputs:
+            path.unlink()
+
+
+def _add_embeddings_to_faiss_index(index, embeddings, dimension: int) -> None:
+    import numpy as np
+
+    embeddings_array = np.asarray(embeddings, dtype="float32")
+    if embeddings_array.ndim != 2 or embeddings_array.shape[1] != dimension:
+        raise ValueError(
+            f"Expected embeddings with dimension {dimension}, got shape {embeddings_array.shape}."
+        )
+    index.add(embeddings_array)
+
+
+def _write_faiss_index(index, index_path: Path, *, ef_search: int) -> None:
+    if hasattr(index, "hnsw"):
+        index.hnsw.efSearch = ef_search
+    try:
+        import faiss
+    except ImportError as error:
+        raise ImportError("Install faiss-cpu before building a FAISS dense index.") from error
+    faiss.write_index(index, str(index_path))
+
+
+def _faiss_metadata(
+    *,
+    corpus_path: str | Path,
+    index_path: Path,
+    docstore_path: Path,
+    embedding_model: str,
+    dimension: int,
+    metric_type: str,
+    index_type: str,
+    hnsw_m: int,
+    ef_construction: int,
+    ef_search: int,
+    inserted_count: int,
+    started: float,
+) -> dict[str, Any]:
+    return {
+        "corpus_fingerprint": portable_corpus_fingerprint(corpus_path),
+        "embedding_model": embedding_model,
+        "dimension": dimension,
+        "metric_type": metric_type,
+        "index_type": index_type,
+        "hnsw_m": hnsw_m,
+        "ef_construction": ef_construction,
+        "ef_search": ef_search,
+        "index_path": str(index_path.resolve()),
+        "docstore_path": str(docstore_path.resolve()),
+        "inserted_count": inserted_count,
+        "elapsed_seconds": perf_counter() - started,
+    }
 
 
 def _read_embedding_shard(embeddings_dir: Path, shard: dict[str, Any]):

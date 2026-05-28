@@ -1,9 +1,13 @@
 import json
 
+import pytest
+
 from src.data.schema import Document
 from src.retrieval.index_builder import (
+    build_faiss_dense_index,
     build_milvus_dense_index,
     export_dense_embeddings,
+    import_dense_embeddings_to_faiss,
     import_dense_embeddings_to_milvus,
     iter_batches,
 )
@@ -125,6 +129,66 @@ def test_import_dense_embeddings_to_milvus_uses_exported_doc_order(tmp_path):
     assert [document.doc_id for document, _ in store.rows] == ["d1", "d2", "d3"]
     assert metadata["inserted_count"] == 3
     assert json.loads(meta_path.read_text(encoding="utf-8"))["embedding_model"] == "fake"
+
+
+def test_build_faiss_dense_index_writes_index_and_docstore(tmp_path):
+    pytest.importorskip("faiss")
+    corpus_path = _write_test_corpus(tmp_path)
+    index_path = tmp_path / "faiss.index"
+    docstore_path = tmp_path / "faiss_docs.jsonl"
+    meta_path = tmp_path / "faiss_meta.json"
+
+    metadata = build_faiss_dense_index(
+        corpus_path=corpus_path,
+        index_path=index_path,
+        docstore_path=docstore_path,
+        embedder=FakeEmbedder(),
+        batch_size=2,
+        overwrite=False,
+        metadata_output_path=meta_path,
+        embedding_model="fake",
+        dimension=2,
+        index_type="flat",
+    )
+
+    assert metadata["inserted_count"] == 3
+    assert index_path.exists()
+    assert docstore_path.exists()
+    assert len(docstore_path.read_text(encoding="utf-8").splitlines()) == 3
+
+
+def test_import_dense_embeddings_to_faiss_uses_exported_doc_order(tmp_path):
+    pytest.importorskip("faiss")
+    corpus_path = _write_test_corpus(tmp_path)
+    output_dir = tmp_path / "embeddings"
+    index_path = tmp_path / "faiss.index"
+    docstore_path = tmp_path / "faiss_docs.jsonl"
+    export_dense_embeddings(
+        corpus_path=corpus_path,
+        output_dir=output_dir,
+        embedder=FakeEmbedder(),
+        batch_size=2,
+        shard_size=2,
+        overwrite=False,
+        embedding_model="fake",
+        dimension=2,
+    )
+
+    metadata = import_dense_embeddings_to_faiss(
+        corpus_path=corpus_path,
+        embeddings_dir=output_dir,
+        index_path=index_path,
+        docstore_path=docstore_path,
+        overwrite=False,
+        index_type="flat",
+    )
+
+    assert metadata["inserted_count"] == 3
+    records = [
+        json.loads(line)
+        for line in docstore_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [record["doc_id"] for record in records] == ["d1", "d2", "d3"]
 
 
 def _write_test_corpus(tmp_path):

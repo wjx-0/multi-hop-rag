@@ -18,13 +18,13 @@ from src.evaluation.evidence_metrics import evidence_metrics
 from src.retrieval.bm25 import BM25Retriever, load_bm25_cache, save_bm25_cache
 from src.retrieval.decomposed_hybrid import QueryRetrievedDocs, fuse_decomposed_rrf_ranked_docs
 from src.retrieval.dense import SentenceTransformerEmbedder
+from src.retrieval.dense_backend import add_dense_backend_args, make_dense_store_from_args
 from src.retrieval.elasticsearch_bm25 import (
     DEFAULT_ELASTICSEARCH_INDEX,
     DEFAULT_ELASTICSEARCH_URL,
     ElasticsearchBM25Retriever,
 )
 from src.retrieval.hybrid import DEFAULT_TITLE_BOOST_WEIGHT
-from src.retrieval.milvus_store import MilvusHotpotStore
 from src.retrieval.query_decomposition import (
     DEFAULT_DECOMPOSITION_CACHE,
     DEFAULT_DECOMPOSITION_MAX_QUERIES,
@@ -61,10 +61,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--embedding-device", default=None)
     parser.add_argument("--embedding-batch-size", type=int, default=32)
     parser.add_argument("--embedding-dimension", type=int, default=1024)
-    parser.add_argument("--milvus-uri", default="http://localhost:19530")
-    parser.add_argument("--milvus-token", default="")
-    parser.add_argument("--milvus-collection-name", default="hotpotqa_global_chunks")
-    parser.add_argument("--milvus-metric-type", default="COSINE")
+    add_dense_backend_args(parser)
     parser.add_argument("--elasticsearch-url", default=DEFAULT_ELASTICSEARCH_URL)
     parser.add_argument("--elasticsearch-index", default=DEFAULT_ELASTICSEARCH_INDEX)
     parser.add_argument("--decomposition-model", default=None)
@@ -95,16 +92,7 @@ def main() -> None:
         device=args.embedding_device,
     )
     print("embedding model loaded")
-    store = MilvusHotpotStore(
-        uri=args.milvus_uri,
-        token=args.milvus_token,
-        collection_name=args.milvus_collection_name,
-        dimension=args.embedding_dimension,
-        metric_type=args.milvus_metric_type,
-    )
-    print(f"loading Milvus collection {args.milvus_collection_name}")
-    store.load_collection()
-    print("Milvus collection loaded")
+    store = make_dense_store_from_args(args)
 
     decomposer = _make_decomposer(args)
     cache = QueryDecompositionCache(args.decomposition_cache)

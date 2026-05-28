@@ -131,6 +131,30 @@ question
   -> top-k RetrievedDoc
 ```
 
+如果服务器不能使用 Docker，也可以不用 Milvus，改用本地 FAISS dense backend：
+
+```bash
+python -u scripts/build_hotpotqa_indexes.py \
+  --mode faiss-dense \
+  --corpus-input data/processed/hotpotqa/global/corpus.jsonl \
+  --drop-existing \
+  --embedding-device cuda \
+  --embedding-batch-size 64
+```
+
+后续检索脚本加：
+
+```bash
+--dense-backend faiss
+```
+
+FAISS 后端默认文件：
+
+```text
+data/indexes/hotpotqa_global/faiss_bge_m3.index
+data/indexes/hotpotqa_global/faiss_bge_m3_docs.jsonl
+```
+
 构建 dense index smoke：
 
 ```bash

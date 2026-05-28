@@ -546,7 +546,8 @@ Phase 2 开始引入 Milvus 作为 dense vector store。
 - 优化 BM25 top-k 选择。（已实现 partial top-k selection，避免 top20/top50 时完整排序）
 - 实现 Milvus vector store。（已实现 hotpotqa_global_chunks collection 封装）
 - 实现 Dense Retriever。（已实现 BGE-M3 -> Milvus dense top-k）
-- 支持 GPU 服务器离线导出 BGE-M3 embedding 分片，并在本地导入 Milvus。（已实现 `dense-embeddings` / `milvus-import-embeddings`）
+- 支持 GPU 服务器离线导出 BGE-M3 embedding 分片，并在本地导入 Milvus 或 FAISS。（已实现 `dense-embeddings` / `milvus-import-embeddings` / `faiss-import-embeddings`）
+- 支持无 Docker 服务器使用本地 FAISS dense backend。（已实现 `faiss-dense` 和 `--dense-backend faiss`）
 - 实现 Hybrid Retriever。（已实现 BM25 + Dense RRF fusion 和 hybrid diagnostic）
 - 实现查询分解检索诊断。（已实现 LLM JSON query decomposition + multi-query Hybrid fusion，用于验证多跳证据召回）
 - 接入 Reranker。（已实现本地 Qwen3-Reranker-0.6B / DashScope qwen3-rerank 两种 backend；diagnostic 不调用回答 LLM）
@@ -881,7 +882,7 @@ Answer / Evidence metrics
 DashScope client
 HotpotQA global deduplicated corpus builder
 Global BM25 Standard RAG baseline
-BGE-M3 + Milvus dense retrieval
+BGE-M3 + Milvus / FAISS dense retrieval
 BM25 + Dense RRF Hybrid retrieval
 Hybrid title boost
 Elasticsearch BM25 backend performance branch

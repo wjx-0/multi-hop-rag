@@ -61,6 +61,43 @@ def test_build_index_parse_args_supports_milvus_embedding_import_mode():
     assert args.milvus_insert_batch_size == 512
 
 
+def test_build_index_parse_args_supports_faiss_dense_mode():
+    args = parse_args(
+        [
+            "--mode",
+            "faiss-dense",
+            "--faiss-index",
+            "data/indexes/hotpotqa_global/faiss.index",
+            "--faiss-docstore",
+            "data/indexes/hotpotqa_global/faiss_docs.jsonl",
+            "--faiss-index-type",
+            "flat",
+            "--faiss-ef-search",
+            "96",
+        ]
+    )
+
+    assert args.mode == "faiss-dense"
+    assert args.faiss_index == "data/indexes/hotpotqa_global/faiss.index"
+    assert args.faiss_docstore == "data/indexes/hotpotqa_global/faiss_docs.jsonl"
+    assert args.faiss_index_type == "flat"
+    assert args.faiss_ef_search == 96
+
+
+def test_build_index_parse_args_supports_faiss_embedding_import_mode():
+    args = parse_args(
+        [
+            "--mode",
+            "faiss-import-embeddings",
+            "--embedding-input-dir",
+            "data/indexes/hotpotqa_global/bge_m3_embeddings",
+        ]
+    )
+
+    assert args.mode == "faiss-import-embeddings"
+    assert args.embedding_input_dir == "data/indexes/hotpotqa_global/bge_m3_embeddings"
+
+
 def test_build_index_parse_args_supports_elasticsearch_bm25_mode():
     args = parse_args(
         [

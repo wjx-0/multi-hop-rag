@@ -12,6 +12,12 @@ def test_run_hybrid_diagnostic_parse_args():
             "uniform",
             "--bm25-backend",
             "elasticsearch",
+            "--dense-backend",
+            "faiss",
+            "--faiss-index",
+            "data/indexes/faiss.index",
+            "--faiss-docstore",
+            "data/indexes/faiss_docs.jsonl",
             "--elasticsearch-url",
             "http://localhost:9200",
             "--elasticsearch-index",
@@ -37,6 +43,9 @@ def test_run_hybrid_diagnostic_parse_args():
     assert args.sample_size == 500
     assert args.sample_strategy == "uniform"
     assert args.bm25_backend == "elasticsearch"
+    assert args.dense_backend == "faiss"
+    assert args.faiss_index == "data/indexes/faiss.index"
+    assert args.faiss_docstore == "data/indexes/faiss_docs.jsonl"
     assert args.elasticsearch_url == "http://localhost:9200"
     assert args.elasticsearch_index == "hotpotqa_test"
     assert args.bm25_top_k == 40
@@ -58,6 +67,7 @@ def test_run_hybrid_diagnostic_defaults_to_rank_bm25_backend():
     args = parse_args([])
 
     assert args.bm25_backend == "rank_bm25"
+    assert args.dense_backend == "milvus"
 
 
 def test_uniform_sample_indexes_returns_all_when_sample_is_larger():

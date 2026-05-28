@@ -16,7 +16,7 @@ from src.data.load_hotpotqa import iter_processed_hotpotqa_questions
 from src.data.schema import HotpotQASample
 from src.evaluation.evidence_metrics import evidence_metrics
 from src.retrieval.dense import SentenceTransformerEmbedder
-from src.retrieval.milvus_store import MilvusHotpotStore
+from src.retrieval.dense_backend import add_dense_backend_args, make_dense_store_from_args
 from src.utils.io import write_jsonl
 
 
@@ -32,10 +32,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--embedding-device", default=None)
     parser.add_argument("--embedding-batch-size", type=int, default=32)
     parser.add_argument("--embedding-dimension", type=int, default=1024)
-    parser.add_argument("--milvus-uri", default="http://localhost:19530")
-    parser.add_argument("--milvus-token", default="")
-    parser.add_argument("--milvus-collection-name", default="hotpotqa_global_chunks")
-    parser.add_argument("--milvus-metric-type", default="COSINE")
+    add_dense_backend_args(parser)
     return parser.parse_args(argv)
 
 
@@ -61,14 +58,7 @@ def main() -> None:
         normalize=True,
         device=args.embedding_device,
     )
-    store = MilvusHotpotStore(
-        uri=args.milvus_uri,
-        token=args.milvus_token,
-        collection_name=args.milvus_collection_name,
-        dimension=args.embedding_dimension,
-        metric_type=args.milvus_metric_type,
-    )
-    store.load_collection()
+    store = make_dense_store_from_args(args)
 
     samples = iter_processed_hotpotqa_questions(args.questions, limit=args.limit)
     records = _run_dense_diagnostic(

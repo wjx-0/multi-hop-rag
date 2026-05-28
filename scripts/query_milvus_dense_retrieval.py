@@ -1,5 +1,5 @@
-# 中文说明：对单个问题执行一次 Milvus dense retrieval 查询，用于 smoke test。
-"""Run a dense retrieval query against the Milvus HotpotQA collection."""
+# 中文说明：对单个问题执行一次 dense retrieval 查询，用于 smoke test。
+"""Run a dense retrieval query against the configured HotpotQA dense store."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.retrieval.dense import DenseRetriever, SentenceTransformerEmbedder
-from src.retrieval.milvus_store import MilvusHotpotStore
+from src.retrieval.dense_backend import add_dense_backend_args, make_dense_store_from_args
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,10 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--embedding-device", default=None)
     parser.add_argument("--embedding-batch-size", type=int, default=16)
     parser.add_argument("--embedding-dimension", type=int, default=1024)
-    parser.add_argument("--milvus-uri", default="http://localhost:19530")
-    parser.add_argument("--milvus-token", default="")
-    parser.add_argument("--milvus-collection-name", default="hotpotqa_global_chunks")
-    parser.add_argument("--milvus-metric-type", default="COSINE")
+    add_dense_backend_args(parser)
     return parser.parse_args()
 
 
@@ -38,14 +35,7 @@ def main() -> None:
         normalize=True,
         device=args.embedding_device,
     )
-    store = MilvusHotpotStore(
-        uri=args.milvus_uri,
-        token=args.milvus_token,
-        collection_name=args.milvus_collection_name,
-        dimension=args.embedding_dimension,
-        metric_type=args.milvus_metric_type,
-    )
-    store.load_collection()
+    store = make_dense_store_from_args(args)
     retriever = DenseRetriever(embedder=embedder, store=store)
     results = retriever.retrieve(args.question, top_k=args.top_k)
 

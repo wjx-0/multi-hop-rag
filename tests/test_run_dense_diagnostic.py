@@ -10,6 +10,10 @@ def test_run_dense_diagnostic_parse_args():
             "50",
             "--query-batch-size",
             "16",
+            "--dense-backend",
+            "faiss",
+            "--faiss-index",
+            "data/indexes/faiss.index",
             "--output",
             "outputs/predictions/dense.jsonl",
         ]
@@ -18,4 +22,6 @@ def test_run_dense_diagnostic_parse_args():
     assert args.limit == 100
     assert args.top_k == 50
     assert args.query_batch_size == 16
+    assert args.dense_backend == "faiss"
+    assert args.faiss_index == "data/indexes/faiss.index"
     assert args.output == "outputs/predictions/dense.jsonl"
