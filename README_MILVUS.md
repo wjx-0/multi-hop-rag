@@ -202,6 +202,12 @@ conda run -n qream-rag python scripts/evaluate_prediction_metrics.py \
 
 BM25 + Dense hybrid retrieval diagnostic：
 
+默认 BM25 后端仍是 Python `rank_bm25`。如果已经按 `README_ELASTICSEARCH.md` 构建 Elasticsearch index，可以在下面命令中加：
+
+```bash
+--bm25-backend elasticsearch
+```
+
 Profile A，BM25 top20 + Dense top50 -> Hybrid final top50：
 
 ```bash

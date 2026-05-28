@@ -23,6 +23,11 @@ from src.evaluation.evidence_metrics import evidence_metrics
 from src.pipeline.standard_rag import select_sentence_citations
 from src.retrieval.bm25 import BM25Retriever, load_bm25_cache, save_bm25_cache
 from src.retrieval.dense import SentenceTransformerEmbedder
+from src.retrieval.elasticsearch_bm25 import (
+    DEFAULT_ELASTICSEARCH_INDEX,
+    DEFAULT_ELASTICSEARCH_URL,
+    ElasticsearchBM25Retriever,
+)
 from src.retrieval.hybrid import DEFAULT_TITLE_BOOST_WEIGHT, fuse_rrf_ranked_docs
 from src.retrieval.milvus_store import MilvusHotpotStore
 from src.retrieval.reranker import (
@@ -44,6 +49,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--questions", default="data/processed/hotpotqa/global/questions_dev.jsonl")
     parser.add_argument("--corpus", default="data/processed/hotpotqa/global/corpus.jsonl")
+    parser.add_argument("--bm25-backend", choices=["rank_bm25", "elasticsearch"], default="rank_bm25")
     parser.add_argument("--bm25-cache", default="data/indexes/hotpotqa_global/bm25.pkl")
     parser.add_argument("--rebuild-bm25-cache", action="store_true")
     parser.add_argument("--output", default="outputs/predictions/rerank_rag_global_top10.jsonl")
@@ -73,6 +79,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--api-max-retries", type=int, default=None)
     parser.add_argument("--api-retry-backoff-seconds", type=float, default=None)
     parser.add_argument("--api-min-request-interval-seconds", type=float, default=None)
+    parser.add_argument("--elasticsearch-url", default=DEFAULT_ELASTICSEARCH_URL)
+    parser.add_argument("--elasticsearch-index", default=DEFAULT_ELASTICSEARCH_INDEX)
     return parser.parse_args(argv)
 
 
@@ -95,11 +103,7 @@ def main() -> None:
     questions_path = Path(args.questions)
     _ensure_global_inputs_exist(corpus_path, questions_path)
 
-    bm25_retriever = _load_or_build_global_bm25(
-        corpus_path=corpus_path,
-        cache_path=Path(args.bm25_cache),
-        rebuild_cache=args.rebuild_bm25_cache,
-    )
+    bm25_retriever = _make_bm25_retriever(args, corpus_path)
     print(f"loading embedding model {args.embedding_model}")
     embedder = SentenceTransformerEmbedder(
         model_name=args.embedding_model,
@@ -367,6 +371,20 @@ def _load_or_build_global_bm25(
     save_bm25_cache(retriever, cache_path, corpus_path=corpus_path)
     print(f"wrote BM25 cache to {cache_path}")
     return retriever
+
+
+def _make_bm25_retriever(args: argparse.Namespace, corpus_path: Path):
+    if args.bm25_backend == "elasticsearch":
+        print(f"using Elasticsearch BM25 index {args.elasticsearch_index}")
+        return ElasticsearchBM25Retriever(
+            url=args.elasticsearch_url,
+            index_name=args.elasticsearch_index,
+        )
+    return _load_or_build_global_bm25(
+        corpus_path=corpus_path,
+        cache_path=Path(args.bm25_cache),
+        rebuild_cache=args.rebuild_bm25_cache,
+    )
 
 
 if __name__ == "__main__":

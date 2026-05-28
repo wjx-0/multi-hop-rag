@@ -883,6 +883,7 @@ Global BM25 Standard RAG baseline
 BGE-M3 + Milvus dense retrieval
 BM25 + Dense RRF Hybrid retrieval
 Hybrid title boost
+Elasticsearch BM25 backend performance branch
 DashScope reranker diagnostic
 Hybrid + Reranker RAG generation baseline
 ```

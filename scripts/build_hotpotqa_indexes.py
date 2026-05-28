@@ -14,6 +14,11 @@ if str(ROOT) not in sys.path:
 from src.data.build_corpus import build_global_deduplicated_corpus
 from src.data.load_hotpotqa import iter_hotpotqa
 from src.retrieval.dense import SentenceTransformerEmbedder
+from src.retrieval.elasticsearch_bm25 import (
+    DEFAULT_ELASTICSEARCH_INDEX,
+    DEFAULT_ELASTICSEARCH_URL,
+    build_elasticsearch_bm25_index,
+)
 from src.retrieval.index_builder import (
     build_milvus_dense_index,
     export_dense_embeddings,
@@ -32,6 +37,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "milvus-dense",
             "dense-embeddings",
             "milvus-import-embeddings",
+            "elasticsearch-bm25",
         ],
         default="global-corpus",
     )
@@ -64,11 +70,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--milvus-metric-type", default="COSINE")
     parser.add_argument("--milvus-insert-batch-size", type=int, default=1024)
     parser.add_argument("--dense-meta-output", default="data/indexes/hotpotqa_global/dense_build_meta.json")
+    parser.add_argument("--elasticsearch-url", default=DEFAULT_ELASTICSEARCH_URL)
+    parser.add_argument("--elasticsearch-index", default=DEFAULT_ELASTICSEARCH_INDEX)
+    parser.add_argument("--elasticsearch-batch-size", type=int, default=500)
     return parser.parse_args(argv)
 
 
 def main() -> None:
     args = parse_args()
+    if args.mode == "elasticsearch-bm25":
+        metadata = build_elasticsearch_bm25_index(
+            corpus_path=args.corpus_input,
+            url=args.elasticsearch_url,
+            index_name=args.elasticsearch_index,
+            limit=args.limit,
+            drop_existing=args.drop_existing,
+            batch_size=args.elasticsearch_batch_size,
+        )
+        print(
+            "built Elasticsearch BM25 index "
+            f"{metadata['index_name']} with {metadata['inserted_count']} documents"
+        )
+        return
+
     if args.mode == "dense-embeddings":
         embedder = SentenceTransformerEmbedder(
             model_name=args.embedding_model,

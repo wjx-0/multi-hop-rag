@@ -7,3 +7,4 @@ outputs/reports/
 data/processed/
 data/indexes/
 infra/milvus/volumes/
+infra/elasticsearch/volumes/

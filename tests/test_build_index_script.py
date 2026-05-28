@@ -59,3 +59,25 @@ def test_build_index_parse_args_supports_milvus_embedding_import_mode():
     assert args.mode == "milvus-import-embeddings"
     assert args.embedding_input_dir == "data/indexes/hotpotqa_global/bge_m3_embeddings"
     assert args.milvus_insert_batch_size == 512
+
+
+def test_build_index_parse_args_supports_elasticsearch_bm25_mode():
+    args = parse_args(
+        [
+            "--mode",
+            "elasticsearch-bm25",
+            "--limit",
+            "1000",
+            "--drop-existing",
+            "--elasticsearch-url",
+            "http://localhost:9200",
+            "--elasticsearch-index",
+            "hotpotqa_test",
+        ]
+    )
+
+    assert args.mode == "elasticsearch-bm25"
+    assert args.limit == 1000
+    assert args.drop_existing is True
+    assert args.elasticsearch_url == "http://localhost:9200"
+    assert args.elasticsearch_index == "hotpotqa_test"

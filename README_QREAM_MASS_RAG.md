@@ -9,6 +9,7 @@
 - [PROJECT_PLAN.md](PROJECT_PLAN.md)
 - [README_DATASETS.md](README_DATASETS.md)
 - [README_MILVUS.md](README_MILVUS.md)
+- [README_ELASTICSEARCH.md](README_ELASTICSEARCH.md)
 
 ---
 
@@ -113,6 +114,7 @@ python3 scripts/run_global_bm25_rag.py \
 ├── PROJECT_PLAN.md                   # 详细实施计划
 ├── README_DATASETS.md                # 数据集选择与 corpus 构建说明
 ├── README_MILVUS.md                  # Milvus 本地启动与 collection 设计
+├── README_ELASTICSEARCH.md           # Elasticsearch BM25 后端启动与索引说明
 ├── requirements.txt                  # Python 依赖
 │
 ├── configs/                          # 配置文件
@@ -139,7 +141,8 @@ python3 scripts/run_global_bm25_rag.py \
 │           └── bge_m3_embeddings/     # GPU 服务器导出的 embedding .npz 分片
 │
 ├── infra/
-│   └── milvus/                        # 后续放 Milvus Docker Compose 文件
+│   ├── milvus/                        # Milvus Docker Compose 文件
+│   └── elasticsearch/                 # Elasticsearch BM25 Docker Compose 文件
 │
 ├── outputs/                           # 运行输出
 │   ├── predictions/                   # prediction JSONL
@@ -289,3 +292,7 @@ python3 scripts/run_global_bm25_rag.py \
 Milvus 本地启动、collection 设计和向量检索计划见：
 
 - [README_MILVUS.md](README_MILVUS.md)
+
+Elasticsearch BM25 后端启动、构建和对比实验见：
+
+- [README_ELASTICSEARCH.md](README_ELASTICSEARCH.md)

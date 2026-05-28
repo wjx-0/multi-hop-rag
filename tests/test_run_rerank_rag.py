@@ -7,6 +7,10 @@ def test_run_rerank_rag_parse_args():
         [
             "--limit",
             "20",
+            "--bm25-backend",
+            "elasticsearch",
+            "--elasticsearch-index",
+            "hotpotqa_test",
             "--bm25-top-k",
             "40",
             "--dense-top-k",
@@ -27,6 +31,8 @@ def test_run_rerank_rag_parse_args():
     )
 
     assert args.limit == 20
+    assert args.bm25_backend == "elasticsearch"
+    assert args.elasticsearch_index == "hotpotqa_test"
     assert args.bm25_top_k == 40
     assert args.dense_top_k == 60
     assert args.hybrid_top_k == 50

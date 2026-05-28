@@ -1,5 +1,6 @@
 # Core dependencies will be expanded during implementation.
 numpy==2.2.6
+elasticsearch>=8,<9
 pymilvus==2.6.11
 rank-bm25==0.2.2
 pytest==8.4.2
