@@ -890,6 +890,7 @@ LLM query decomposition + decomposed Hybrid retrieval diagnostic
 DashScope reranker diagnostic
 Local Qwen3 reranker backend
 Hybrid + Reranker RAG generation baseline
+Local Qwen3-8B generation backend for RAG smoke tests
 ```
 
 下一步从 **Milvus Dense / Hybrid Retrieval Upgrade** 继续。

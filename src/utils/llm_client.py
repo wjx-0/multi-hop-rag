@@ -20,6 +20,10 @@ from typing import Any, Protocol
 from src.data.schema import RetrievedDoc
 from src.utils.text import simple_tokenize
 
+DEFAULT_LOCAL_LLM_MODEL = "Qwen/Qwen3-8B"
+DEFAULT_LOCAL_LLM_MAX_NEW_TOKENS = 64
+DEFAULT_LOCAL_LLM_MAX_INPUT_LENGTH = 4096
+
 
 class LLMClient(Protocol):
     def generate(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
@@ -62,6 +66,9 @@ def load_env_file(path: str | Path = ".env", *, override: bool = False) -> None:
 class MockLLMClient:
     """A deterministic extractive placeholder for smoke tests."""
 
+    provider = "mock"
+    model = "mock"
+
     def answer_from_docs(self, question: str, docs: list[RetrievedDoc]) -> GenerationResult:
         started = perf_counter()
         query_terms = set(simple_tokenize(question))
@@ -96,6 +103,8 @@ class MockLLMClient:
 
 class AliyunDashScopeClient:
     """OpenAI-compatible Aliyun DashScope chat client."""
+
+    provider = "aliyun_dashscope"
 
     def __init__(
         self,
@@ -252,6 +261,163 @@ class AliyunDashScopeClient:
         )
 
 
+class LocalTransformersLLMClient:
+    """Local Hugging Face causal LM client for answer generation."""
+
+    provider = "local_transformers"
+
+    def __init__(
+        self,
+        *,
+        model: str | None = None,
+        device: str | None = None,
+        torch_dtype: str | None = "auto",
+        max_new_tokens: int = DEFAULT_LOCAL_LLM_MAX_NEW_TOKENS,
+        temperature: float = 0.0,
+        max_input_length: int = DEFAULT_LOCAL_LLM_MAX_INPUT_LENGTH,
+        local_files_only: bool = True,
+    ) -> None:
+        if max_new_tokens <= 0:
+            raise ValueError("max_new_tokens must be positive.")
+        if max_input_length <= 0:
+            raise ValueError("max_input_length must be positive.")
+
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+        except ImportError as error:
+            raise ImportError(
+                "LocalTransformersLLMClient requires torch and transformers. "
+                "Install project dependencies with `python -m pip install -r requirements.txt`."
+            ) from error
+
+        self.model = model or os.getenv("LOCAL_LLM_MODEL", DEFAULT_LOCAL_LLM_MODEL)
+        model_path = _resolve_local_model_path(self.model) if local_files_only else self.model
+        self.device = _resolve_local_device(device, torch)
+        self.max_new_tokens = max_new_tokens
+        self.temperature = temperature
+        self.max_input_length = max_input_length
+        self.local_files_only = local_files_only
+        self._torch = torch
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path,
+            padding_side="left",
+            local_files_only=local_files_only,
+            trust_remote_code=True,
+        )
+        if tokenizer.pad_token_id is None:
+            if tokenizer.eos_token is None:
+                raise ValueError("Local LLM tokenizer has no pad_token or eos_token.")
+            tokenizer.pad_token = tokenizer.eos_token
+
+        model_kwargs: dict[str, Any] = {
+            "local_files_only": local_files_only,
+            "trust_remote_code": True,
+        }
+        resolved_dtype = _resolve_torch_dtype(torch_dtype, torch, self.device)
+        if resolved_dtype is not None:
+            model_kwargs["torch_dtype"] = resolved_dtype
+        model_obj = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+        model_obj.eval()
+        model_obj.to(self.device)
+        if getattr(model_obj.config, "pad_token_id", None) is None:
+            model_obj.config.pad_token_id = tokenizer.pad_token_id
+
+        self._tokenizer = tokenizer
+        self._model = model_obj
+
+    def generate(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
+        max_new_tokens = int(kwargs.pop("max_tokens", kwargs.pop("max_new_tokens", self.max_new_tokens)))
+        temperature = float(kwargs.pop("temperature", self.temperature))
+        do_sample = bool(kwargs.pop("do_sample", temperature > 0))
+        input_ids = self._encode_messages(messages)
+        attention_mask = self._torch.ones_like(input_ids)
+
+        generation_kwargs: dict[str, Any] = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": do_sample,
+            "pad_token_id": self._tokenizer.pad_token_id,
+            "eos_token_id": self._tokenizer.eos_token_id,
+        }
+        if do_sample:
+            generation_kwargs["temperature"] = temperature
+        generation_kwargs.update(kwargs)
+
+        with self._torch.no_grad():
+            generated_ids = self._model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                **generation_kwargs,
+            )
+        output_ids = generated_ids[0, input_ids.shape[-1]:]
+        answer = self._tokenizer.decode(output_ids, skip_special_tokens=True)
+        return _strip_qwen_thinking(answer).strip()
+
+    def generate_json(self, messages: list[dict[str, str]], schema: Any = None, **kwargs: Any) -> dict[str, Any]:
+        content = self.generate(messages, **kwargs)
+        return json.loads(_strip_json_fence(content))
+
+    def answer_from_docs(self, question: str, docs: list[RetrievedDoc]) -> GenerationResult:
+        started = perf_counter()
+        context = "\n\n".join(
+            f"[{doc.rank}] Title: {doc.title}\nPassage: {doc.text}"
+            for doc in docs
+        )
+        answer = self.generate(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You answer HotpotQA questions using only the provided evidence. "
+                        "Return the shortest answer span when possible. "
+                        "For yes/no questions, answer only yes or no. "
+                        "If the evidence is insufficient, answer unknown. "
+                        "Do not include explanations or citation markers."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Question:\n{question}\n\nEvidence:\n{context}\n\nAnswer:",
+                },
+            ],
+        )
+        latency = perf_counter() - started
+        return GenerationResult(
+            answer=answer,
+            cost={
+                "llm_calls": 1,
+                "input_tokens": len(simple_tokenize(question)) + sum(len(simple_tokenize(doc.text)) for doc in docs),
+                "output_tokens": len(simple_tokenize(answer)),
+                "latency": latency,
+                "mock_llm": False,
+                "provider": self.provider,
+                "model": self.model,
+            },
+        )
+
+    def _encode_messages(self, messages: list[dict[str, str]]):
+        try:
+            input_ids = self._tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                enable_thinking=False,
+                return_tensors="pt",
+            )
+        except TypeError:
+            input_ids = self._tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+        input_ids = input_ids.to(self.device)
+        if input_ids.shape[-1] > self.max_input_length:
+            input_ids = input_ids[:, -self.max_input_length:]
+        return input_ids
+
+
 def _strip_json_fence(text: str) -> str:
     stripped = text.strip()
     if not stripped.startswith("```"):
@@ -267,3 +433,74 @@ def _strip_json_fence(text: str) -> str:
 
 def _is_retryable_http_status(status_code: int) -> bool:
     return status_code == 429 or 500 <= status_code < 600
+
+
+def _strip_qwen_thinking(text: str) -> str:
+    if "</think>" in text:
+        return text.split("</think>", 1)[1]
+    return text
+
+
+def _resolve_local_device(device: str | None, torch_module: Any) -> str:
+    if device:
+        return device
+    if torch_module.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
+def _resolve_local_model_path(model: str) -> str:
+    model_path = Path(model).expanduser()
+    if model_path.exists():
+        return str(model_path)
+
+    cache_root = _default_hf_hub_cache()
+    cached_model_dir = cache_root / f"models--{model.replace('/', '--')}"
+    if not cached_model_dir.exists():
+        return model
+
+    ref_path = cached_model_dir / "refs" / "main"
+    if ref_path.exists():
+        revision = ref_path.read_text(encoding="utf-8").strip()
+        snapshot_path = cached_model_dir / "snapshots" / revision
+        if snapshot_path.exists():
+            return str(snapshot_path)
+
+    snapshots_dir = cached_model_dir / "snapshots"
+    if snapshots_dir.exists():
+        snapshots = sorted(path for path in snapshots_dir.iterdir() if path.is_dir())
+        if snapshots:
+            return str(snapshots[-1])
+
+    return model
+
+
+def _default_hf_hub_cache() -> Path:
+    if os.getenv("HF_HUB_CACHE"):
+        return Path(os.environ["HF_HUB_CACHE"]).expanduser()
+    if os.getenv("HF_HOME"):
+        return Path(os.environ["HF_HOME"]).expanduser() / "hub"
+    return Path.home() / ".cache" / "huggingface" / "hub"
+
+
+def _resolve_torch_dtype(dtype_name: str | None, torch_module: Any, device: str) -> Any | None:
+    if dtype_name is None or dtype_name == "":
+        return None
+
+    normalized = dtype_name.lower()
+    if normalized == "auto":
+        if device.startswith("cuda"):
+            return torch_module.float16
+        return None
+
+    dtype_by_name = {
+        "float16": torch_module.float16,
+        "fp16": torch_module.float16,
+        "bfloat16": torch_module.bfloat16,
+        "bf16": torch_module.bfloat16,
+        "float32": torch_module.float32,
+        "fp32": torch_module.float32,
+    }
+    if normalized not in dtype_by_name:
+        raise ValueError("local LLM dtype must be one of auto, float16, bfloat16, float32.")
+    return dtype_by_name[normalized]

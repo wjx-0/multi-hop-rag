@@ -119,6 +119,19 @@ conda run -n qream-rag python scripts/diagnose_hybrid_rerank.py \
   --reranker-backend dashscope
 ```
 
+Hybrid RAG 生成默认仍可使用 DashScope。若服务器已下载 `Qwen/Qwen3-8B`，可以改用本地 8B 生成模型：
+
+```bash
+python scripts/run_hybrid_rerank_rag.py \
+  --limit 10 \
+  --bm25-backend elasticsearch \
+  --dense-backend faiss \
+  --reranker-backend local \
+  --llm local \
+  --local-llm-device cuda \
+  --local-llm-dtype float16
+```
+
 如果服务器无法使用 Docker/Milvus，可以构建本地 FAISS dense index，并在诊断脚本里切换后端：
 
 ```bash

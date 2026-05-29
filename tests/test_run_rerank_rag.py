@@ -58,6 +58,32 @@ def test_run_rerank_rag_parse_args():
     assert args.output == "outputs/predictions/rerank_rag.jsonl"
 
 
+def test_run_rerank_rag_parse_args_supports_local_llm():
+    args = parse_args(
+        [
+            "--llm",
+            "local",
+            "--local-llm-model",
+            "Qwen/Qwen3-8B",
+            "--local-llm-device",
+            "cuda",
+            "--local-llm-dtype",
+            "float16",
+            "--local-llm-max-new-tokens",
+            "32",
+            "--local-llm-max-input-length",
+            "2048",
+        ]
+    )
+
+    assert args.llm == "local"
+    assert args.local_llm_model == "Qwen/Qwen3-8B"
+    assert args.local_llm_device == "cuda"
+    assert args.local_llm_dtype == "float16"
+    assert args.local_llm_max_new_tokens == 32
+    assert args.local_llm_max_input_length == 2048
+
+
 def test_run_rerank_rag_falls_back_when_reranker_fails():
     sample = _sample(answer="final answer")
 

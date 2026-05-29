@@ -1,7 +1,7 @@
 import os
 import urllib.error
 
-from src.utils.llm_client import AliyunDashScopeClient, load_env_file
+from src.utils.llm_client import AliyunDashScopeClient, _strip_qwen_thinking, load_env_file
 
 
 def test_load_env_file_reads_key_values(tmp_path, monkeypatch):
@@ -94,3 +94,7 @@ def test_aliyun_client_retries_transient_http_errors(monkeypatch):
 
     assert client.generate([{"role": "user", "content": "hello"}]) == "ok"
     assert calls["count"] == 2
+
+
+def test_strip_qwen_thinking_removes_reasoning_block():
+    assert _strip_qwen_thinking("<think>reasoning</think>\nanswer").strip() == "answer"

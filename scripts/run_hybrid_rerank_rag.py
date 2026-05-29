@@ -42,8 +42,12 @@ from src.retrieval.reranker import (
 from src.utils.io import write_jsonl
 from src.utils.llm_client import (
     AliyunDashScopeClient,
+    DEFAULT_LOCAL_LLM_MAX_INPUT_LENGTH,
+    DEFAULT_LOCAL_LLM_MAX_NEW_TOKENS,
+    DEFAULT_LOCAL_LLM_MODEL,
     GenerationResult,
     LLMClient,
+    LocalTransformersLLMClient,
     MockLLMClient,
 )
 from src.utils.text import simple_tokenize
@@ -81,7 +85,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--local-reranker-max-length", type=int, default=DEFAULT_LOCAL_RERANK_MAX_LENGTH)
     parser.add_argument("--local-reranker-dtype", default="auto")
     parser.add_argument("--local-reranker-allow-download", action="store_true")
-    parser.add_argument("--llm", choices=["aliyun", "mock"], default="aliyun")
+    parser.add_argument("--llm", choices=["aliyun", "mock", "local"], default="aliyun")
+    parser.add_argument("--local-llm-model", default=DEFAULT_LOCAL_LLM_MODEL)
+    parser.add_argument("--local-llm-device", default=None)
+    parser.add_argument("--local-llm-dtype", default="auto")
+    parser.add_argument("--local-llm-max-new-tokens", type=int, default=DEFAULT_LOCAL_LLM_MAX_NEW_TOKENS)
+    parser.add_argument("--local-llm-temperature", type=float, default=0.0)
+    parser.add_argument("--local-llm-max-input-length", type=int, default=DEFAULT_LOCAL_LLM_MAX_INPUT_LENGTH)
+    parser.add_argument("--local-llm-allow-download", action="store_true")
     parser.add_argument("--api-timeout-seconds", type=float, default=None)
     parser.add_argument("--api-max-retries", type=int, default=None)
     parser.add_argument("--api-retry-backoff-seconds", type=float, default=None)
@@ -301,7 +312,7 @@ def answer_from_reranked_docs(
             "output_tokens": len(simple_tokenize(answer)),
             "latency": latency,
             "mock_llm": False,
-            "provider": "aliyun_dashscope",
+            "provider": getattr(llm_client, "provider", "unknown"),
             "model": getattr(llm_client, "model", ""),
         },
     )
@@ -310,6 +321,19 @@ def answer_from_reranked_docs(
 def _make_llm_client(args: argparse.Namespace) -> LLMClient:
     if args.llm == "mock":
         return MockLLMClient()
+    if args.llm == "local":
+        print(f"loading local LLM {args.local_llm_model}")
+        client = LocalTransformersLLMClient(
+            model=args.local_llm_model,
+            device=args.local_llm_device,
+            torch_dtype=args.local_llm_dtype,
+            max_new_tokens=args.local_llm_max_new_tokens,
+            temperature=args.local_llm_temperature,
+            max_input_length=args.local_llm_max_input_length,
+            local_files_only=not args.local_llm_allow_download,
+        )
+        print(f"local LLM loaded on {client.device}")
+        return client
     return AliyunDashScopeClient(
         timeout_seconds=args.api_timeout_seconds,
         max_retries=args.api_max_retries,
@@ -358,6 +382,8 @@ def _validate_args(args: argparse.Namespace) -> None:
         "answer_top_k",
         "local_reranker_batch_size",
         "local_reranker_max_length",
+        "local_llm_max_new_tokens",
+        "local_llm_max_input_length",
     ]
     for field in positive_fields:
         if getattr(args, field) <= 0:
