@@ -40,8 +40,6 @@ def test_decomposed_rerank_rag_parse_args():
             "4",
             "--decomposition-cache",
             "outputs/cache/decomposed_test.jsonl",
-            "--decomposition-query-mode",
-            "generated_or_original",
             "--local-decomposition-device",
             "cuda",
             "--local-decomposition-dtype",
@@ -86,7 +84,6 @@ def test_decomposed_rerank_rag_parse_args():
     assert args.decomposition_model == "Qwen/Qwen3-8B"
     assert args.decomposition_max_queries == 4
     assert args.decomposition_cache == "outputs/cache/decomposed_test.jsonl"
-    assert args.decomposition_query_mode == "generated_or_original"
     assert args.local_decomposition_device == "cuda"
     assert args.local_decomposition_dtype == "float16"
     assert args.local_decomposition_max_new_tokens == 128
@@ -296,7 +293,7 @@ class FailingDecomposer:
 
 
 class FakeCache:
-    def get(self, *, sample_id, question, query_mode="original_plus_generated"):
+    def get(self, *, sample_id, question):
         return QueryDecompositionResult(
             sample_id=sample_id,
             question=question,
@@ -304,7 +301,6 @@ class FakeCache:
             generated_queries=["Gold Title fact"],
             model="cached-decomposer",
             from_cache=True,
-            query_mode=query_mode,
         )
 
     def put(self, result):

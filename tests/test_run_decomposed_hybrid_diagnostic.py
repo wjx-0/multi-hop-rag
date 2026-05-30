@@ -30,8 +30,6 @@ def test_decomposed_hybrid_diagnostic_parse_args():
             "3",
             "--decomposition-cache",
             "outputs/cache/test_decomposition.jsonl",
-            "--decomposition-query-mode",
-            "generated_or_original",
             "--output",
             "outputs/predictions/decomposed.jsonl",
         ]
@@ -47,7 +45,6 @@ def test_decomposed_hybrid_diagnostic_parse_args():
     assert args.decomposition_model == "Qwen/Qwen3-8B"
     assert args.decomposition_max_queries == 3
     assert args.decomposition_cache == "outputs/cache/test_decomposition.jsonl"
-    assert args.decomposition_query_mode == "generated_or_original"
     assert args.output == "outputs/predictions/decomposed.jsonl"
 
 
@@ -93,7 +90,6 @@ def test_make_decomposer_can_reuse_local_json_client():
     assert result.model == "local-json-model"
     assert result.queries == ["Question?", "Gold Title fact"]
     assert decomposer.pass_model_arg is False
-    assert decomposer.query_mode == "original_plus_generated"
 
 
 def test_decomposed_hybrid_diagnostic_records_decomposition_and_cost():

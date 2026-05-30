@@ -12,8 +12,6 @@ from src.utils.io import read_jsonl
 DEFAULT_DECOMPOSITION_MAX_QUERIES = 4
 DEFAULT_DECOMPOSITION_MAX_QUERY_CHARS = 200
 DEFAULT_DECOMPOSITION_CACHE = "outputs/cache/decomposed_queries.jsonl"
-DEFAULT_DECOMPOSITION_QUERY_MODE = "original_plus_generated"
-DECOMPOSITION_QUERY_MODES = ("original_plus_generated", "generated_or_original")
 
 
 class JsonLLMClient(Protocol):
@@ -33,7 +31,6 @@ class QueryDecompositionResult:
     fallback: bool = False
     error: str | None = None
     from_cache: bool = False
-    query_mode: str = DEFAULT_DECOMPOSITION_QUERY_MODE
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -49,7 +46,6 @@ class QueryDecompositionResult:
             fallback=bool(data.get("fallback", False)),
             error=data.get("error"),
             from_cache=from_cache,
-            query_mode=str(data.get("query_mode", DEFAULT_DECOMPOSITION_QUERY_MODE)),
         )
 
 
@@ -64,20 +60,16 @@ class LLMQueryDecomposer:
         max_queries: int = DEFAULT_DECOMPOSITION_MAX_QUERIES,
         max_query_chars: int = DEFAULT_DECOMPOSITION_MAX_QUERY_CHARS,
         pass_model_arg: bool = True,
-        query_mode: str = DEFAULT_DECOMPOSITION_QUERY_MODE,
     ) -> None:
         if max_queries <= 0:
             raise ValueError("max_queries must be positive.")
         if max_query_chars <= 0:
             raise ValueError("max_query_chars must be positive.")
-        if query_mode not in DECOMPOSITION_QUERY_MODES:
-            raise ValueError(f"query_mode must be one of {DECOMPOSITION_QUERY_MODES}.")
         self.llm_client = llm_client
         self.model = model or getattr(llm_client, "model", "")
         self.max_queries = max_queries
         self.max_query_chars = max_query_chars
         self.pass_model_arg = pass_model_arg
-        self.query_mode = query_mode
 
     def decompose(self, *, sample_id: str, question: str) -> QueryDecompositionResult:
         try:
@@ -97,25 +89,17 @@ class LLMQueryDecomposer:
                 generated_queries,
                 max_queries=self.max_queries,
                 max_query_chars=self.max_query_chars,
-                query_mode=self.query_mode,
             )
-            fallback = _is_fallback_query_set(
-                original_question=question,
-                queries=queries,
-                generated_queries=generated_queries,
-                query_mode=self.query_mode,
-                max_query_chars=self.max_query_chars,
-            )
+            fallback = len(queries) == 1
             error = "no valid decomposed queries" if fallback and generated_queries else None
             return QueryDecompositionResult(
                 sample_id=sample_id,
                 question=question,
                 queries=queries,
-                generated_queries=_selected_generated_queries(queries, fallback=fallback, query_mode=self.query_mode),
+                generated_queries=[query for query in queries[1:]],
                 model=self.model,
                 fallback=fallback,
                 error=error,
-                query_mode=self.query_mode,
             )
         except Exception as error:  # noqa: BLE001 - decomposition fallback keeps diagnostics running.
             return fallback_decomposition_result(
@@ -123,7 +107,6 @@ class LLMQueryDecomposer:
                 question=question,
                 model=self.model,
                 error=str(error),
-                query_mode=self.query_mode,
             )
 
 
@@ -132,22 +115,15 @@ class QueryDecompositionCache:
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
-        self._records: dict[tuple[str, str], QueryDecompositionResult] = {}
+        self._records: dict[str, QueryDecompositionResult] = {}
         self._load()
 
-    def get(
-        self,
-        *,
-        sample_id: str,
-        question: str,
-        query_mode: str = DEFAULT_DECOMPOSITION_QUERY_MODE,
-    ) -> QueryDecompositionResult | None:
+    def get(self, *, sample_id: str, question: str) -> QueryDecompositionResult | None:
         for key in (_cache_key(sample_id), _cache_key(question)):
             if not key:
                 continue
-            cache_key = (key, query_mode)
-            if cache_key in self._records:
-                record = self._records[cache_key]
+            if key in self._records:
+                record = self._records[key]
                 return QueryDecompositionResult(
                     sample_id=sample_id or record.sample_id,
                     question=question or record.question,
@@ -157,7 +133,6 @@ class QueryDecompositionCache:
                     fallback=record.fallback,
                     error=record.error,
                     from_cache=True,
-                    query_mode=record.query_mode,
                 )
         return None
 
@@ -182,7 +157,7 @@ class QueryDecompositionCache:
     def _store(self, result: QueryDecompositionResult) -> None:
         for key in (_cache_key(result.sample_id), _cache_key(result.question)):
             if key:
-                self._records[(key, result.query_mode)] = result
+                self._records[key] = result
 
 
 def decomposition_messages(question: str) -> list[dict[str, str]]:
@@ -262,23 +237,21 @@ def clean_decomposed_queries(
     *,
     max_queries: int,
     max_query_chars: int = DEFAULT_DECOMPOSITION_MAX_QUERY_CHARS,
-    query_mode: str = DEFAULT_DECOMPOSITION_QUERY_MODE,
 ) -> list[str]:
     if max_queries <= 0:
         raise ValueError("max_queries must be positive.")
-    if query_mode not in DECOMPOSITION_QUERY_MODES:
-        raise ValueError(f"query_mode must be one of {DECOMPOSITION_QUERY_MODES}.")
 
-    candidate_queries = (
-        [original_question, *generated_queries]
-        if query_mode == "original_plus_generated"
-        else generated_queries
-    )
-    cleaned = _clean_query_candidates(
-        candidate_queries,
-        max_queries=max_queries,
-        max_query_chars=max_query_chars,
-    )
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for query in [original_question, *generated_queries]:
+        normalized = _clean_query_text(query, max_chars=max_query_chars)
+        key = _dedupe_key(normalized)
+        if not normalized or key in seen:
+            continue
+        cleaned.append(normalized)
+        seen.add(key)
+        if len(cleaned) >= max_queries:
+            break
     return cleaned or [original_question.strip()]
 
 
@@ -288,7 +261,6 @@ def fallback_decomposition_result(  #如果llm调用失败会会滚
     question: str,
     model: str,
     error: str,
-    query_mode: str = DEFAULT_DECOMPOSITION_QUERY_MODE,
 ) -> QueryDecompositionResult:
     return QueryDecompositionResult(
         sample_id=sample_id,
@@ -298,40 +270,7 @@ def fallback_decomposition_result(  #如果llm调用失败会会滚
         model=model,
         fallback=True,
         error=error,
-        query_mode=query_mode,
     )
-
-
-def _is_fallback_query_set(
-    *,
-    original_question: str,
-    queries: list[str],
-    generated_queries: list[str],
-    query_mode: str,
-    max_query_chars: int,
-) -> bool:
-    if query_mode == "original_plus_generated":
-        return len(queries) == 1
-
-    cleaned_generated = _clean_query_candidates(
-        generated_queries,
-        max_queries=len(generated_queries) or 1,
-        max_query_chars=max_query_chars,
-    )
-    return not cleaned_generated
-
-
-def _selected_generated_queries(
-    queries: list[str],
-    *,
-    fallback: bool,
-    query_mode: str,
-) -> list[str]:
-    if fallback:
-        return []
-    if query_mode == "generated_or_original":
-        return list(queries)
-    return [query for query in queries[1:]]
 
 
 def _clean_query_text(query: str, *, max_chars: int) -> str:
@@ -340,26 +279,6 @@ def _clean_query_text(query: str, *, max_chars: int) -> str:
     if len(query) > max_chars:
         query = query[:max_chars].rstrip()
     return query
-
-
-def _clean_query_candidates(
-    queries: list[str],
-    *,
-    max_queries: int,
-    max_query_chars: int,
-) -> list[str]:
-    cleaned: list[str] = []
-    seen: set[str] = set()
-    for query in queries:
-        normalized = _clean_query_text(query, max_chars=max_query_chars)
-        key = _dedupe_key(normalized)
-        if not normalized or key in seen:
-            continue
-        cleaned.append(normalized)
-        seen.add(key)
-        if len(cleaned) >= max_queries:
-            break
-    return cleaned
 
 
 def _dedupe_key(query: str) -> str:
