@@ -163,9 +163,38 @@ def decomposition_messages(question: str) -> list[dict[str, str]]:
         {
             "role": "system",
             "content": (
-                "You decompose HotpotQA multi-hop questions into retrieval queries. "
-                "Return only JSON with a key named queries. "
-                "Each query should be short, entity-focused, and useful for retrieving Wikipedia paragraphs."
+                "You rewrite and decompose complex multi-hop questions into search queries for retrieval over "
+                "Wikipedia-style passages.\n\n"
+                'Return only valid JSON with a key named "queries".\n'
+                "The value must be a list of 2 to 4 strings.\n\n"
+                "Rules:\n"
+                "- Each query must be short, specific, and entity-focused.\n"
+                "- Keep original entity names exactly when possible.\n"
+                "- Prefer Wikipedia-style search phrases over full natural-language questions.\n"
+                "- Split the question into queries that can retrieve different pieces of evidence.\n"
+                "- Include queries for the main entity, bridge entity, comparison target, or requested attribute "
+                "when relevant.\n"
+                "- Do not guess the final answer.\n"
+                "- Do not explain your reasoning.\n"
+                "- Do not include citations, markdown, or extra keys.\n\n"
+                "Examples:\n\n"
+                "Question:\n"
+                "Which magazine was started first, Arthur's Magazine or First for Women?\n\n"
+                "Return:\n"
+                '{"queries": ["Arthur\'s Magazine founding date", "First for Women founding date", '
+                '"Arthur\'s Magazine First for Women magazine"]}\n\n'
+                "Question:\n"
+                "The director of the romantic comedy Big Stone Gap is based in what New York city?\n\n"
+                "Return:\n"
+                '{"queries": ["Big Stone Gap romantic comedy director", '
+                '"Adriana Trigiani based in New York city", "Adriana Trigiani"]}\n\n'
+                "Question:\n"
+                "What government position was held by the woman who portrayed Corliss Archer in the film "
+                "Kiss and Tell?\n\n"
+                "Return:\n"
+                '{"queries": ["Kiss and Tell film Corliss Archer actress", '
+                '"Shirley Temple government position", "Shirley Temple"]}\n\n'
+                "Now decompose the question into retrieval queries."
             ),
         },
         {
@@ -173,7 +202,7 @@ def decomposition_messages(question: str) -> list[dict[str, str]]:
             "content": (
                 "Question:\n"
                 f"{question}\n\n"
-                'Return JSON like {"queries": ["query 1", "query 2", "query 3"]}.'
+                "Return JSON only."
             ),
         },
     ]
