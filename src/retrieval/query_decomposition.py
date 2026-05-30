@@ -59,6 +59,7 @@ class LLMQueryDecomposer:
         model: str | None = None,
         max_queries: int = DEFAULT_DECOMPOSITION_MAX_QUERIES,
         max_query_chars: int = DEFAULT_DECOMPOSITION_MAX_QUERY_CHARS,
+        pass_model_arg: bool = True,
     ) -> None:
         if max_queries <= 0:
             raise ValueError("max_queries must be positive.")
@@ -68,6 +69,7 @@ class LLMQueryDecomposer:
         self.model = model or getattr(llm_client, "model", "")
         self.max_queries = max_queries
         self.max_query_chars = max_query_chars
+        self.pass_model_arg = pass_model_arg
 
     def decompose(self, *, sample_id: str, question: str) -> QueryDecompositionResult:
         try:
@@ -75,7 +77,7 @@ class LLMQueryDecomposer:
                 "temperature": 0,
                 "max_tokens": 256,
             }
-            if self.model:
+            if self.model and self.pass_model_arg:
                 generation_kwargs["model"] = self.model
             response = self.llm_client.generate_json(
                 decomposition_messages(question),

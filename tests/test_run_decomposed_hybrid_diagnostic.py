@@ -89,6 +89,7 @@ def test_make_decomposer_can_reuse_local_json_client():
 
     assert result.model == "local-json-model"
     assert result.queries == ["Question?", "Gold Title fact"]
+    assert decomposer.pass_model_arg is False
 
 
 def test_decomposed_hybrid_diagnostic_records_decomposition_and_cost():

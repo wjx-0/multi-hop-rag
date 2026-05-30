@@ -60,6 +60,21 @@ def test_llm_query_decomposer_uses_clean_generated_queries():
     assert result.fallback is False
 
 
+def test_llm_query_decomposer_can_skip_model_generation_kwarg():
+    client = RejectingModelKwargJSONClient({"queries": ["Entity page"]})
+    decomposer = LLMQueryDecomposer(
+        llm_client=client,
+        model="local-model",
+        max_queries=4,
+        pass_model_arg=False,
+    )
+
+    result = decomposer.decompose(sample_id="q1", question="Original question?")
+
+    assert result.queries == ["Original question?", "Entity page"]
+    assert client.received_model_kwarg is False
+
+
 def test_query_decomposition_cache_round_trips_successful_results(tmp_path):
     cache_path = tmp_path / "decomposition.jsonl"
     decomposer = LLMQueryDecomposer(
@@ -93,3 +108,17 @@ class FailingJSONClient:
 
     def generate_json(self, messages, schema=None, **kwargs):
         raise RuntimeError("temporary failure")
+
+
+class RejectingModelKwargJSONClient:
+    model = "fake-model"
+
+    def __init__(self, response):
+        self.response = response
+        self.received_model_kwarg = False
+
+    def generate_json(self, messages, schema=None, **kwargs):
+        self.received_model_kwarg = "model" in kwargs
+        if self.received_model_kwarg:
+            raise RuntimeError("local generate does not accept model kwarg")
+        return self.response

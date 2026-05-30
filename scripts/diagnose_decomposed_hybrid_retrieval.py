@@ -287,6 +287,7 @@ def _make_decomposer(
             model=args.decomposition_model or getattr(client, "model", ""),
             max_queries=args.decomposition_max_queries,
             max_query_chars=args.decomposition_max_query_chars,
+            pass_model_arg=False,
         )
 
     client = AliyunDashScopeClient(
