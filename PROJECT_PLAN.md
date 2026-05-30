@@ -550,6 +550,7 @@ Phase 2 开始引入 Milvus 作为 dense vector store。
 - 支持无 Docker 服务器使用本地 FAISS dense backend。（已实现 `faiss-dense` 和 `--dense-backend faiss`）
 - 实现 Hybrid Retriever。（已实现 BM25 + Dense RRF fusion 和 hybrid diagnostic）
 - 实现查询分解检索诊断。（已实现 LLM JSON query decomposition + multi-query Hybrid fusion，用于验证多跳证据召回）
+- 支持查询分解 query mode 消融。（已实现 `original_plus_generated` / `generated_or_original`，用于验证原问题是否压制分解 query）
 - 实现查询分解融合前/后诊断。（已实现 `diagnose_decomposed_fusion_stages.py`，用于对比 BM25/Dense raw pool 与 RRF 融合 topK 是否丢证据）
 - 将查询分解接入 Rerank + answer generation。（已实现 `run_decomposed_hybrid_rerank_rag.py`，查询分解支持 DashScope API / 本地 8B backend，用于对比是否提升最终 answer EM/F1 和 supporting fact F1）
 - 接入 Reranker。（已实现本地 Qwen3-Reranker-0.6B / DashScope qwen3-rerank 两种 backend；diagnostic 不调用回答 LLM）
@@ -889,6 +890,7 @@ BM25 + Dense RRF Hybrid retrieval
 Hybrid title boost
 Elasticsearch BM25 backend performance branch
 LLM query decomposition + decomposed Hybrid retrieval diagnostic
+Query decomposition query mode ablation
 DashScope reranker diagnostic
 Local Qwen3 reranker backend
 Hybrid + Reranker RAG generation baseline

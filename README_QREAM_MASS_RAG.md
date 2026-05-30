@@ -178,6 +178,33 @@ python scripts/evaluate_prediction_metrics.py \
   --local-decomposition-max-new-tokens 128 \
 ```
 
+查询分解默认使用 `original_plus_generated`：原问题始终作为第 1 个 query，再追加分解 query。若要验证“只用分解 query，失败时才回退原问题”，显式加入：
+
+```bash
+  --decomposition-query-mode generated_or_original \
+```
+
+对应的融合前/后诊断 smoke 命令：
+
+```bash
+python -u scripts/diagnose_decomposed_fusion_stages.py \
+  --limit 200 \
+  --bm25-backend elasticsearch \
+  --elasticsearch-url http://localhost:9200 \
+  --dense-backend faiss \
+  --embedding-device cuda \
+  --embedding-batch-size 64 \
+  --query-batch-size 8 \
+  --bm25-top-k 20 \
+  --dense-top-k 20 \
+  --final-top-k 100 \
+  --fusion-ks 5,10,20,50,100 \
+  --decomposition-backend local \
+  --decomposition-query-mode generated_or_original \
+  --decomposition-cache outputs/cache/fusion_decomp_generated_only_head200_bm20_dense20.jsonl \
+  --output outputs/predictions/fusion_decomp_generated_only_head200_bm20_dense20_top100.jsonl
+```
+
 如果服务器无法使用 Docker/Milvus，可以构建本地 FAISS dense index，并在诊断脚本里切换后端：
 
 ```bash

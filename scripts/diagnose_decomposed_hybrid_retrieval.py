@@ -29,6 +29,8 @@ from src.retrieval.query_decomposition import (
     DEFAULT_DECOMPOSITION_CACHE,
     DEFAULT_DECOMPOSITION_MAX_QUERIES,
     DEFAULT_DECOMPOSITION_MAX_QUERY_CHARS,
+    DEFAULT_DECOMPOSITION_QUERY_MODE,
+    DECOMPOSITION_QUERY_MODES,
     LLMQueryDecomposer,
     QueryDecompositionCache,
     QueryDecompositionResult,
@@ -81,6 +83,11 @@ def add_decomposition_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--decomposition-model", default=None)
     parser.add_argument("--decomposition-max-queries", type=int, default=DEFAULT_DECOMPOSITION_MAX_QUERIES)
     parser.add_argument("--decomposition-max-query-chars", type=int, default=DEFAULT_DECOMPOSITION_MAX_QUERY_CHARS)
+    parser.add_argument(
+        "--decomposition-query-mode",
+        choices=DECOMPOSITION_QUERY_MODES,
+        default=DEFAULT_DECOMPOSITION_QUERY_MODE,
+    )
     parser.add_argument("--decomposition-cache", default=DEFAULT_DECOMPOSITION_CACHE)
     parser.add_argument("--local-decomposition-model", default=DEFAULT_LOCAL_LLM_MODEL)
     parser.add_argument("--local-decomposition-device", default=None)
@@ -251,7 +258,16 @@ def _decompose_sample(
     decomposer: LLMQueryDecomposer,
     cache: QueryDecompositionCache | None,
 ) -> QueryDecompositionResult:
-    cached = cache.get(sample_id=sample.id, question=sample.question) if cache is not None else None
+    query_mode = getattr(decomposer, "query_mode", DEFAULT_DECOMPOSITION_QUERY_MODE)
+    cached = (
+        cache.get(
+            sample_id=sample.id,
+            question=sample.question,
+            query_mode=query_mode,
+        )
+        if cache is not None
+        else None
+    )
     if cached is not None:
         return cached
 
@@ -288,6 +304,7 @@ def _make_decomposer(
             max_queries=args.decomposition_max_queries,
             max_query_chars=args.decomposition_max_query_chars,
             pass_model_arg=False,
+            query_mode=args.decomposition_query_mode,
         )
 
     client = AliyunDashScopeClient(
@@ -301,6 +318,7 @@ def _make_decomposer(
         model=args.decomposition_model,
         max_queries=args.decomposition_max_queries,
         max_query_chars=args.decomposition_max_query_chars,
+        query_mode=args.decomposition_query_mode,
     )
 
 

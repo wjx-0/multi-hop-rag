@@ -28,6 +28,8 @@ def test_decomposed_fusion_stages_parse_args():
             "5,10,50,100",
             "--decomposition-backend",
             "local",
+            "--decomposition-query-mode",
+            "generated_or_original",
             "--output",
             "outputs/predictions/stages.jsonl",
         ]
@@ -42,6 +44,7 @@ def test_decomposed_fusion_stages_parse_args():
     assert args.final_top_k == 100
     assert args.fusion_ks == "5,10,50,100"
     assert args.decomposition_backend == "local"
+    assert args.decomposition_query_mode == "generated_or_original"
     assert args.output == "outputs/predictions/stages.jsonl"
 
 
