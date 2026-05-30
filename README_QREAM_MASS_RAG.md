@@ -259,6 +259,7 @@ python scripts/diagnose_hybrid_retrieval.py \
 │   ├── diagnose_dense_retrieval.py             # 批量 dense evidence recall 诊断，不调用 LLM
 │   ├── diagnose_hybrid_retrieval.py            # 批量 BM25 + Dense hybrid evidence recall 诊断
 │   ├── diagnose_decomposed_hybrid_retrieval.py # 批量 LLM 查询分解 + Hybrid evidence recall 诊断
+│   ├── diagnose_decomposed_fusion_stages.py    # 查询分解后融合前 raw pool 与融合后 topK 证据召回对比
 │   ├── diagnose_hybrid_rerank.py               # 批量 Hybrid top50 + 本地/DashScope rerank 诊断
 │   ├── run_hybrid_rerank_rag.py                # Hybrid + Rerank + answer baseline，支持 DashScope / 本地 8B
 │   ├── run_decomposed_hybrid_rerank_rag.py     # 查询分解 + Hybrid + Rerank + answer 实验入口
