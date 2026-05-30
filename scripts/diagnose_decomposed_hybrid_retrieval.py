@@ -34,9 +34,17 @@ from src.retrieval.query_decomposition import (
     QueryDecompositionResult,
 )
 from src.utils.io import write_jsonl
-from src.utils.llm_client import AliyunDashScopeClient
+from src.utils.llm_client import (
+    AliyunDashScopeClient,
+    DEFAULT_LOCAL_LLM_MAX_INPUT_LENGTH,
+    DEFAULT_LOCAL_LLM_MODEL,
+    LLMClient,
+    LocalTransformersLLMClient,
+)
 
 from scripts.diagnose_hybrid_retrieval import iter_batches, iter_sampled_questions
+
+DEFAULT_LOCAL_DECOMPOSITION_MAX_NEW_TOKENS = 256
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -64,15 +72,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     add_dense_backend_args(parser)
     parser.add_argument("--elasticsearch-url", default=DEFAULT_ELASTICSEARCH_URL)
     parser.add_argument("--elasticsearch-index", default=DEFAULT_ELASTICSEARCH_INDEX)
+    add_decomposition_args(parser)
+    return parser.parse_args(argv)
+
+
+def add_decomposition_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--decomposition-backend", choices=["aliyun", "local"], default="aliyun")
     parser.add_argument("--decomposition-model", default=None)
     parser.add_argument("--decomposition-max-queries", type=int, default=DEFAULT_DECOMPOSITION_MAX_QUERIES)
     parser.add_argument("--decomposition-max-query-chars", type=int, default=DEFAULT_DECOMPOSITION_MAX_QUERY_CHARS)
     parser.add_argument("--decomposition-cache", default=DEFAULT_DECOMPOSITION_CACHE)
+    parser.add_argument("--local-decomposition-model", default=DEFAULT_LOCAL_LLM_MODEL)
+    parser.add_argument("--local-decomposition-device", default=None)
+    parser.add_argument("--local-decomposition-dtype", default="auto")
+    parser.add_argument(
+        "--local-decomposition-max-new-tokens",
+        type=int,
+        default=DEFAULT_LOCAL_DECOMPOSITION_MAX_NEW_TOKENS,
+    )
+    parser.add_argument("--local-decomposition-temperature", type=float, default=0.0)
+    parser.add_argument("--local-decomposition-max-input-length", type=int, default=DEFAULT_LOCAL_LLM_MAX_INPUT_LENGTH)
+    parser.add_argument("--local-decomposition-allow-download", action="store_true")
     parser.add_argument("--api-timeout-seconds", type=float, default=None)
     parser.add_argument("--api-max-retries", type=int, default=None)
     parser.add_argument("--api-retry-backoff-seconds", type=float, default=None)
     parser.add_argument("--api-min-request-interval-seconds", type=float, default=None)
-    return parser.parse_args(argv)
 
 
 def main() -> None:
@@ -237,7 +261,34 @@ def _decompose_sample(
     return result
 
 
-def _make_decomposer(args: argparse.Namespace) -> LLMQueryDecomposer:
+def _make_decomposer(
+    args: argparse.Namespace,
+    *,
+    local_llm_client: LLMClient | None = None,
+) -> LLMQueryDecomposer:
+    if args.decomposition_backend == "local":
+        client = local_llm_client
+        if client is None:
+            model = args.decomposition_model or args.local_decomposition_model
+            print(f"loading local decomposition LLM {model}")
+            client = LocalTransformersLLMClient(
+                model=model,
+                device=args.local_decomposition_device,
+                torch_dtype=args.local_decomposition_dtype,
+                max_new_tokens=args.local_decomposition_max_new_tokens,
+                temperature=args.local_decomposition_temperature,
+                max_input_length=args.local_decomposition_max_input_length,
+                local_files_only=not args.local_decomposition_allow_download,
+            )
+            print(f"local decomposition LLM loaded on {client.device}")
+
+        return LLMQueryDecomposer(
+            llm_client=client,
+            model=args.decomposition_model or getattr(client, "model", ""),
+            max_queries=args.decomposition_max_queries,
+            max_query_chars=args.decomposition_max_query_chars,
+        )
+
     client = AliyunDashScopeClient(
         timeout_seconds=args.api_timeout_seconds,
         max_retries=args.api_max_retries,
@@ -260,6 +311,8 @@ def _validate_args(args: argparse.Namespace) -> None:
         "final_top_k",
         "decomposition_max_queries",
         "decomposition_max_query_chars",
+        "local_decomposition_max_new_tokens",
+        "local_decomposition_max_input_length",
     ]
     for field in positive_fields:
         if getattr(args, field) <= 0:

@@ -1,4 +1,5 @@
 from scripts.diagnose_decomposed_hybrid_retrieval import (
+    _make_decomposer,
     _run_decomposed_hybrid_diagnostic,
     parse_args,
 )
@@ -45,6 +46,49 @@ def test_decomposed_hybrid_diagnostic_parse_args():
     assert args.decomposition_max_queries == 3
     assert args.decomposition_cache == "outputs/cache/test_decomposition.jsonl"
     assert args.output == "outputs/predictions/decomposed.jsonl"
+
+
+def test_decomposed_hybrid_diagnostic_parse_args_supports_local_decomposition():
+    args = parse_args(
+        [
+            "--decomposition-backend",
+            "local",
+            "--decomposition-model",
+            "Qwen/Qwen3-8B",
+            "--local-decomposition-device",
+            "cuda",
+            "--local-decomposition-dtype",
+            "float16",
+            "--local-decomposition-max-new-tokens",
+            "128",
+            "--local-decomposition-max-input-length",
+            "2048",
+        ]
+    )
+
+    assert args.decomposition_backend == "local"
+    assert args.decomposition_model == "Qwen/Qwen3-8B"
+    assert args.local_decomposition_device == "cuda"
+    assert args.local_decomposition_dtype == "float16"
+    assert args.local_decomposition_max_new_tokens == 128
+    assert args.local_decomposition_max_input_length == 2048
+
+
+def test_make_decomposer_can_reuse_local_json_client():
+    args = parse_args(
+        [
+            "--decomposition-backend",
+            "local",
+            "--decomposition-model",
+            "local-json-model",
+        ]
+    )
+
+    decomposer = _make_decomposer(args, local_llm_client=FakeJSONClient({"queries": ["Gold Title fact"]}))
+    result = decomposer.decompose(sample_id="q1", question="Question?")
+
+    assert result.model == "local-json-model"
+    assert result.queries == ["Question?", "Gold Title fact"]
 
 
 def test_decomposed_hybrid_diagnostic_records_decomposition_and_cost():
@@ -100,6 +144,16 @@ class FakeDecomposer:
             generated_queries=["Gold Title fact"],
             model=self.model,
         )
+
+
+class FakeJSONClient:
+    model = "fake-json-client"
+
+    def __init__(self, response):
+        self.response = response
+
+    def generate_json(self, messages, schema=None, **kwargs):
+        return self.response
 
 
 class FakeBM25Retriever:

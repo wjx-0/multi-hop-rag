@@ -132,6 +132,52 @@ python scripts/run_hybrid_rerank_rag.py \
   --local-llm-dtype float16
 ```
 
+如果要测试“查询分解是否能提升最终生成效果”，使用查询分解版 RAG 脚本。它会先把原问题分解成多个检索 query，再做 Hybrid 融合、rerank 和本地 8B 生成：
+
+```bash
+cd /root/rivermind-data/multi-hop-rag
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+python scripts/run_decomposed_hybrid_rerank_rag.py \
+  --limit 10 \
+  --bm25-backend elasticsearch \
+  --elasticsearch-url http://localhost:9200 \
+  --dense-backend faiss \
+  --embedding-device cuda \
+  --embedding-batch-size 8 \
+  --query-batch-size 2 \
+  --bm25-top-k 50 \
+  --dense-top-k 50 \
+  --hybrid-top-k 50 \
+  --rerank-top-n 50 \
+  --answer-top-k 10 \
+  --decomposition-model qwen-plus \
+  --decomposition-cache outputs/cache/decomposed_qwenplus_rag.jsonl \
+  --reranker-backend local \
+  --local-reranker-device cuda \
+  --local-reranker-batch-size 1 \
+  --local-reranker-dtype float16 \
+  --llm local \
+  --local-llm-model Qwen/Qwen3-8B \
+  --local-llm-device cuda \
+  --local-llm-dtype float16 \
+  --local-llm-max-new-tokens 32 \
+  --output outputs/predictions/decomposed_hybrid_localrerank_local8b_head10.jsonl
+
+python scripts/evaluate_prediction_metrics.py \
+  --predictions outputs/predictions/decomposed_hybrid_localrerank_local8b_head10.jsonl
+```
+
+如果查询分解也不想调用 DashScope API，把上面命令里的 `--decomposition-model qwen-plus` 换成以下本地参数。若本地分解模型和 `--local-llm-model` 相同，脚本会复用同一个 8B 模型实例，避免重复占用显存：
+
+```bash
+  --decomposition-backend local \
+  --local-decomposition-model Qwen/Qwen3-8B \
+  --local-decomposition-device cuda \
+  --local-decomposition-dtype float16 \
+  --local-decomposition-max-new-tokens 128 \
+```
+
 如果服务器无法使用 Docker/Milvus，可以构建本地 FAISS dense index，并在诊断脚本里切换后端：
 
 ```bash
@@ -214,7 +260,8 @@ python scripts/diagnose_hybrid_retrieval.py \
 │   ├── diagnose_hybrid_retrieval.py            # 批量 BM25 + Dense hybrid evidence recall 诊断
 │   ├── diagnose_decomposed_hybrid_retrieval.py # 批量 LLM 查询分解 + Hybrid evidence recall 诊断
 │   ├── diagnose_hybrid_rerank.py               # 批量 Hybrid top50 + 本地/DashScope rerank 诊断
-│   ├── run_hybrid_rerank_rag.py                # Hybrid + Rerank + DashScope answer baseline
+│   ├── run_hybrid_rerank_rag.py                # Hybrid + Rerank + answer baseline，支持 DashScope / 本地 8B
+│   ├── run_decomposed_hybrid_rerank_rag.py     # 查询分解 + Hybrid + Rerank + answer 实验入口
 │   ├── analyze_prediction_bad_cases.py         # prediction JSONL bad case 分析报告
 │   ├── run_router_rag_placeholder.py           # 后续运行 Router-RAG
 │   └── run_qream_mass_rag_placeholder.py       # 后续运行 QREAM + MASS-RAG
